@@ -388,14 +388,17 @@ class DashboardView extends StatelessWidget {
   }
 
   Widget _buildSkillsPanel(GameEngine engine) {
-    // Show top 5 skills on dashboard
-    final listSkills = [
-      SkillType.woodcutting,
-      SkillType.herbalism,
-      SkillType.mining,
-      SkillType.wayfinding,
-      SkillType.lore,
-    ];
+    // Get all skills that have been trained (level > 1 or xp > 0)
+    final activeSkills = engine.skills.values
+        .where((skill) => skill.level > 1 || skill.xp > 0)
+        .toList();
+
+    // Sort by level descending, then by xp descending
+    activeSkills.sort((a, b) {
+      int cmp = b.level.compareTo(a.level);
+      if (cmp != 0) return cmp;
+      return b.xp.compareTo(a.xp);
+    });
 
     return Container(
       decoration: GameTheme.glassCardDecoration(),
@@ -404,7 +407,7 @@ class DashboardView extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const Text(
-            'CHARACTER & SKILLS',
+            'CHARACTER & ACTIVE SKILLS',
             style: TextStyle(
               color: GameTheme.accentGold,
               fontSize: 12,
@@ -413,48 +416,62 @@ class DashboardView extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 6),
-          ...listSkills.map((type) {
-            final skill = engine.skills[type]!;
-            final color = GameTheme.getSkillColor(type);
-
-            return Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        '${type.icon} ${type.name}: ${skill.level}',
-                        style: const TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                      ),
-                      Text(
-                        skill.isGated
-                            ? '🔒 Gate'
-                            : '(${((skill.progress) * 100).toInt()}% to ${skill.level + 1})',
-                        style: TextStyle(
-                          fontSize: 10,
-                          color: skill.isGated ? GameTheme.healthRed : GameTheme.textMuted,
-                          fontWeight: skill.isGated ? FontWeight.bold : FontWeight.normal,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 3),
-                  CustomProgressBar(
-                    progress: skill.progress,
-                    color: skill.isGated ? GameTheme.healthRed : color,
-                    height: 8,
-                  ),
-                ],
+          if (activeSkills.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 12.0),
+              child: Text(
+                'No active skills trained yet. Start performing actions in travel zones to level up!',
+                style: TextStyle(
+                  color: GameTheme.textMuted,
+                  fontSize: 11,
+                  fontStyle: FontStyle.italic,
+                ),
+                textAlign: TextAlign.center,
               ),
-            );
-          }).toList(),
+            )
+          else
+            ...activeSkills.map((skill) {
+              final type = skill.type;
+              final color = GameTheme.getSkillColor(type);
+
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          '${type.icon} ${type.name}: ${skill.level}',
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                        Text(
+                          skill.isGated
+                              ? '🔒 Gate'
+                              : '(${((skill.progress) * 100).toInt()}% to ${skill.level + 1})',
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: skill.isGated ? GameTheme.healthRed : GameTheme.textMuted,
+                            fontWeight: skill.isGated ? FontWeight.bold : FontWeight.normal,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 3),
+                    CustomProgressBar(
+                      progress: skill.progress,
+                      color: skill.isGated ? GameTheme.healthRed : color,
+                      height: 8,
+                    ),
+                  ],
+                ),
+              );
+            }).toList(),
         ],
       ),
     );
