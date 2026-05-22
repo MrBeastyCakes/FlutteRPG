@@ -346,21 +346,16 @@ class DashboardView extends StatelessWidget {
                       child: IgnorePointer(
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(8),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                flex: (runningState.progress * 100).toInt(),
-                                child: Container(
-                                  color: GameTheme.accentGold.withOpacity(0.12),
-                                ),
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: AnimatedFractionallySizedBox(
+                              duration: const Duration(milliseconds: 100),
+                              curve: Curves.linear,
+                              widthFactor: runningState.progress,
+                              child: Container(
+                                color: GameTheme.accentGold.withOpacity(0.12),
                               ),
-                              Expanded(
-                                flex: ((1.0 - runningState.progress) * 100).toInt(),
-                                child: Container(
-                                  color: Colors.transparent,
-                                ),
-                              ),
-                            ],
+                            ),
                           ),
                         ),
                       ),
@@ -371,11 +366,19 @@ class DashboardView extends StatelessWidget {
                       bottom: 0,
                       left: 0,
                       right: 0,
-                      child: LinearProgressIndicator(
-                        value: runningState.progress,
-                        backgroundColor: Colors.transparent,
-                        valueColor: const AlwaysStoppedAnimation<Color>(GameTheme.accentGold),
-                        minHeight: 3,
+                      child: SizedBox(
+                        height: 3,
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: AnimatedFractionallySizedBox(
+                            duration: const Duration(milliseconds: 100),
+                            curve: Curves.linear,
+                            widthFactor: runningState.progress,
+                            child: Container(
+                              color: GameTheme.accentGold,
+                            ),
+                          ),
+                        ),
                       ),
                     ),
                 ],
