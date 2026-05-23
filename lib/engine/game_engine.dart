@@ -249,6 +249,83 @@ class GameEngine extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Calculate global XP multiplier based on Lore skill level and perks
+  double getXpMultiplier() {
+    final loreSkill = _skills[SkillType.lore];
+    if (loreSkill == null) return 1.0;
+    double mult = 1.0 + (loreSkill.level - 1) * 0.03;
+    if (loreSkill.levelCap > 10) mult += 0.15;
+    if (loreSkill.levelCap > 20) mult += 0.25;
+    return mult;
+  }
+
+  /// Get total action speed bonus (combines level-based, masterwork perks, and equipped tool)
+  double getSkillSpeedBonus(SkillType type) {
+    final skill = _skills[type];
+    if (skill == null) return 0.0;
+    
+    double bonus = (skill.level - 1) * 0.02; // +2% per level above 1
+    if (skill.levelCap > 10) bonus += 0.20; // Lvl 10 Perk (+20% speed)
+    if (skill.levelCap > 20) bonus += 0.30; // Lvl 20 Perk (+30% speed)
+
+    final tool = _equippedTools[type];
+    if (tool != null) {
+      bonus += tool.speedBonus;
+    }
+    return bonus;
+  }
+
+  /// Get total success chance bonus (combines level-based and equipped tool success bonuses)
+  double getSkillSuccessBonus(SkillType type) {
+    final skill = _skills[type];
+    if (skill == null) return 0.0;
+
+    double bonus = (skill.level - 1) * 0.01; // +1% per level above 1
+    
+    final tool = _equippedTools[type];
+    if (tool != null) {
+      bonus += tool.successBonus;
+    }
+    return bonus;
+  }
+
+  /// Get modified energy cost for a skill-based action, recipe, or structure
+  int getModifiedEnergyCost(int baseCost, SkillType? skillType) {
+    if (baseCost <= 0 || skillType == null) return baseCost;
+    final skill = _skills[skillType];
+    if (skill == null) return baseCost;
+
+    // Level-based reduction: -1% energy cost per level above 1
+    double reduction = (skill.level - 1) * 0.01;
+    double cost = baseCost * (1.0 - reduction);
+
+    // Masterwork flat reductions (Tier 10 perk)
+    if (skill.levelCap > 10) {
+      switch (skillType) {
+        case SkillType.woodcutting:
+          cost -= 2;
+          break;
+        case SkillType.mining:
+          cost -= 3;
+          break;
+        case SkillType.herbalism:
+          cost -= 1;
+          break;
+        case SkillType.wayfinding:
+          cost -= 2;
+          break;
+        case SkillType.crafting:
+        case SkillType.cooking:
+          cost -= 1;
+          break;
+        default:
+          break;
+      }
+    }
+
+    return max(1, cost.round());
+  }
+
   // Timer Tick Action
   void startAction(ZoneAction action) {
     // 1. Skill requirement check
@@ -269,7 +346,8 @@ class GameEngine extends ChangeNotifier {
     // 3. Energy check
     // If energyCost is positive (consumption), ensure we have enough.
     // Negative energyCost means we are recovering energy (e.g. resting).
-    if (action.energyCost > 0 && _playerStats.currentEnergy < action.energyCost) {
+    final actualEnergyCost = getModifiedEnergyCost(action.energyCost, action.requiredSkill);
+    if (actualEnergyCost > 0 && _playerStats.currentEnergy < actualEnergyCost) {
       log("Not enough energy! Rest at the Town Inn or eat food.", LogType.error);
       return;
     }
@@ -283,13 +361,10 @@ class GameEngine extends ChangeNotifier {
     // Cancel previous
     cancelAction();
 
-    // Calculate speed bonus from equipped tools
+    // Calculate speed bonus from skill level and equipped tools
     double speedBonus = 0.0;
     if (action.requiredSkill != null) {
-      final equippedTool = _equippedTools[action.requiredSkill!];
-      if (equippedTool != null) {
-        speedBonus = equippedTool.speedBonus;
-      }
+      speedBonus = getSkillSpeedBonus(action.requiredSkill!);
     }
 
     // Apply zone speed modifiers
@@ -362,7 +437,8 @@ class GameEngine extends ChangeNotifier {
     }
 
     // 3. Energy check
-    if (recipe.energyCost > 0 && _playerStats.currentEnergy < recipe.energyCost) {
+    final actualEnergyCost = getModifiedEnergyCost(recipe.energyCost, recipe.requiredSkill);
+    if (actualEnergyCost > 0 && _playerStats.currentEnergy < actualEnergyCost) {
       log("Not enough energy! Rest at the Town Inn or eat food.", LogType.error);
       return;
     }
@@ -388,6 +464,7 @@ class GameEngine extends ChangeNotifier {
     }
 
     double duration = recipe.durationSeconds.toDouble();
+    duration = duration / (1.0 + getSkillSpeedBonus(recipe.requiredSkill));
     if (duration < 1.0) duration = 1.0;
 
     _activeAction = ActiveActionState(
@@ -442,7 +519,8 @@ class GameEngine extends ChangeNotifier {
     }
 
     // 3. Energy check
-    if (structure.energyCost > 0 && _playerStats.currentEnergy < structure.energyCost) {
+    final actualEnergyCost = getModifiedEnergyCost(structure.energyCost, structure.requiredSkill);
+    if (actualEnergyCost > 0 && _playerStats.currentEnergy < actualEnergyCost) {
       log("Not enough energy! Rest or eat food.", LogType.error);
       return;
     }
@@ -468,6 +546,7 @@ class GameEngine extends ChangeNotifier {
     }
 
     double duration = structure.durationSeconds.toDouble();
+    duration = duration / (1.0 + getSkillSpeedBonus(structure.requiredSkill));
     if (duration < 1.0) duration = 1.0;
 
     _activeAction = ActiveActionState(
@@ -513,13 +592,15 @@ class GameEngine extends ChangeNotifier {
       final zoneId = _activeAction!.targetZoneId!;
 
       // Deduct Energy
-      int newEnergy = _playerStats.currentEnergy - structure.energyCost;
+      final actualEnergyCost = getModifiedEnergyCost(structure.energyCost, structure.requiredSkill);
+      int newEnergy = _playerStats.currentEnergy - actualEnergyCost;
       newEnergy = newEnergy.clamp(0, _playerStats.maxEnergy);
       _playerStats = _playerStats.copyWith(currentEnergy: newEnergy);
 
       // Award XP
       final oldSkill = _skills[structure.requiredSkill]!;
-      final newSkill = oldSkill.addXp(structure.xpReward);
+      final xpReward = structure.xpReward * getXpMultiplier();
+      final newSkill = oldSkill.addXp(xpReward);
       _skills[structure.requiredSkill] = newSkill;
 
       if (newSkill.level > oldSkill.level) {
@@ -536,7 +617,7 @@ class GameEngine extends ChangeNotifier {
         _zoneStructures[zoneId]!.add(structure.id);
       }
 
-      log("Success! Finished building ${structure.name} (+${structure.xpReward.toInt()} ${structure.requiredSkill.name} XP).", LogType.success);
+      log("Success! Finished building ${structure.name} (+${xpReward.toInt()} ${structure.requiredSkill.name} XP).", LogType.success);
 
       _activeAction = null;
       notifyListeners();
@@ -547,13 +628,15 @@ class GameEngine extends ChangeNotifier {
       final recipe = _activeAction!.recipe!;
 
       // Deduct Energy
-      int newEnergy = _playerStats.currentEnergy - recipe.energyCost;
+      final actualEnergyCost = getModifiedEnergyCost(recipe.energyCost, recipe.requiredSkill);
+      int newEnergy = _playerStats.currentEnergy - actualEnergyCost;
       newEnergy = newEnergy.clamp(0, _playerStats.maxEnergy);
       _playerStats = _playerStats.copyWith(currentEnergy: newEnergy);
 
       // Award XP
       final oldSkill = _skills[recipe.requiredSkill]!;
-      final newSkill = oldSkill.addXp(recipe.xpReward);
+      final xpReward = recipe.xpReward * getXpMultiplier();
+      final newSkill = oldSkill.addXp(xpReward);
       _skills[recipe.requiredSkill] = newSkill;
 
       if (newSkill.level > oldSkill.level) {
@@ -562,18 +645,40 @@ class GameEngine extends ChangeNotifier {
         log("Limit Reached! Level ${newSkill.levelCap} Masterwork Trial is now unlocked. Check the Skills tab.", LogType.warning);
       }
 
-      // Award result item
-      final resultItem = recipe.resultItem;
-      if (resultItem != null) {
-        if (_inventory.isFull) {
-          log("Your inventory is full! The ${resultItem.name} was dropped.", LogType.error);
-        } else {
-          _inventory = _inventory.addItem(resultItem, recipe.resultQuantity);
-          log("Crafted: ${resultItem.icon} ${resultItem.name} x${recipe.resultQuantity}", LogType.success);
+      // Check Crafting Level 20 Perk: 15% chance to save all inputs
+      if (recipe.requiredSkill == SkillType.crafting && oldSkill.levelCap > 20) {
+        if (_random.nextDouble() <= 0.15) {
+          for (var entry in recipe.inputs.entries) {
+            final item = Items.findById(entry.key);
+            if (item != null) {
+              _inventory = _inventory.addItem(item, entry.value);
+            }
+          }
+          log("🛠️ Artisan's Touch Perk! Saved all ingredients!", LogType.success);
         }
       }
 
-      log("Success! Finished crafting ${recipe.name} (+${recipe.xpReward.toInt()} ${recipe.requiredSkill.name} XP).", LogType.success);
+      // Award result item
+      final resultItem = recipe.resultItem;
+      if (resultItem != null) {
+        int finalQty = recipe.resultQuantity;
+        // Check Cooking Level 20 Perk: 20% chance to double output
+        if (recipe.requiredSkill == SkillType.cooking && oldSkill.levelCap > 20) {
+          if (_random.nextDouble() <= 0.20) {
+            finalQty *= 2;
+            log("🍳 Master Culinarian Perk! Output doubled!", LogType.success);
+          }
+        }
+
+        if (_inventory.isFull) {
+          log("Your inventory is full! The ${resultItem.name} was dropped.", LogType.error);
+        } else {
+          _inventory = _inventory.addItem(resultItem, finalQty);
+          log("Crafted: ${resultItem.icon} ${resultItem.name} x$finalQty", LogType.success);
+        }
+      }
+
+      log("Success! Finished crafting ${recipe.name} (+${xpReward.toInt()} ${recipe.requiredSkill.name} XP).", LogType.success);
 
       _activeAction = null;
       notifyListeners();
@@ -583,7 +688,8 @@ class GameEngine extends ChangeNotifier {
     final action = _activeAction!.action!;
 
     // Deduct/Recover Energy
-    int newEnergy = _playerStats.currentEnergy - action.energyCost;
+    final actualEnergyCost = getModifiedEnergyCost(action.energyCost, action.requiredSkill);
+    int newEnergy = _playerStats.currentEnergy - actualEnergyCost;
     newEnergy = newEnergy.clamp(0, _playerStats.maxEnergy);
 
     // Apply Gold Cost if Inn Rest
@@ -627,29 +733,34 @@ class GameEngine extends ChangeNotifier {
           
       if (isHarvestingSkill) {
         final equippedTool = _equippedTools[action.requiredSkill!];
+        final skillState = _skills[action.requiredSkill!];
+        final isImmuneToBareHanded = skillState != null && skillState.levelCap > 10;
+        
         if (equippedTool == null) {
           hasRequiredTool = false;
           
-          int bareDamage = 0;
-          String damageReason = "";
-          if (action.requiredSkill == SkillType.woodcutting) {
-            bareDamage = 5;
-            damageReason = "bruised knuckles and wood splinters";
-          } else if (action.requiredSkill == SkillType.mining) {
-            bareDamage = 8;
-            damageReason = "cut fingers and sharp stone shards";
-          } else if (action.requiredSkill == SkillType.herbalism) {
-            bareDamage = 3;
-            damageReason = "thorn pricks and skin irritation";
-          }
-          
-          int bareHealth = max(0, _playerStats.currentHealth - bareDamage);
-          _playerStats = _playerStats.copyWith(currentHealth: bareHealth);
-          log("🩹 Ouch! Harvesting ${action.requiredSkill!.name.toLowerCase()} with your bare hands dealt $bareDamage damage ($damageReason)!", LogType.warning);
-          
-          if (_playerStats.isDead) {
-            faint();
-            return;
+          if (!isImmuneToBareHanded) {
+            int bareDamage = 0;
+            String damageReason = "";
+            if (action.requiredSkill == SkillType.woodcutting) {
+              bareDamage = 5;
+              damageReason = "bruised knuckles and wood splinters";
+            } else if (action.requiredSkill == SkillType.mining) {
+              bareDamage = 8;
+              damageReason = "cut fingers and sharp stone shards";
+            } else if (action.requiredSkill == SkillType.herbalism) {
+              bareDamage = 3;
+              damageReason = "rose pricks and skin irritation";
+            }
+            
+            int bareHealth = max(0, _playerStats.currentHealth - bareDamage);
+            _playerStats = _playerStats.copyWith(currentHealth: bareHealth);
+            log("🩹 Ouch! Harvesting ${action.requiredSkill!.name.toLowerCase()} with your bare hands dealt $bareDamage damage ($damageReason)!", LogType.warning);
+            
+            if (_playerStats.isDead) {
+              faint();
+              return;
+            }
           }
         }
       }
@@ -658,7 +769,8 @@ class GameEngine extends ChangeNotifier {
     // Award XP
     if (action.requiredSkill != null) {
       final oldSkill = _skills[action.requiredSkill!]!;
-      final newSkill = oldSkill.addXp(action.xpReward);
+      final xpReward = action.xpReward * getXpMultiplier();
+      final newSkill = oldSkill.addXp(xpReward);
       _skills[action.requiredSkill!] = newSkill;
 
       if (newSkill.level > oldSkill.level) {
@@ -671,12 +783,23 @@ class GameEngine extends ChangeNotifier {
     // Roll Loot table
     bool inventoryFullError = false;
     
-    // Retrieve success bonus from equipped tool
+    // Retrieve success bonus from equipped tool and level
     double successBonus = 0.0;
     if (action.requiredSkill != null) {
-      final equippedTool = _equippedTools[action.requiredSkill!];
-      if (equippedTool != null) {
-        successBonus = equippedTool.successBonus;
+      successBonus = getSkillSuccessBonus(action.requiredSkill!);
+    }
+
+    // Check Woodcutting, Mining, Herbalism Level 20 Perk: 15% chance to double yield
+    bool doubleYield = false;
+    if (action.requiredSkill != null &&
+        (action.requiredSkill == SkillType.woodcutting ||
+         action.requiredSkill == SkillType.mining ||
+         action.requiredSkill == SkillType.herbalism)) {
+      final skill = _skills[action.requiredSkill!];
+      if (skill != null && skill.levelCap > 20) {
+        if (_random.nextDouble() <= 0.15) {
+          doubleYield = true;
+        }
       }
     }
 
@@ -692,6 +815,9 @@ class GameEngine extends ChangeNotifier {
         if (loot.maxQuantity > loot.minQuantity) {
           qty = loot.minQuantity + _random.nextInt(loot.maxQuantity - loot.minQuantity + 1);
         }
+        if (doubleYield) {
+          qty *= 2;
+        }
 
         if (_inventory.isFull) {
           inventoryFullError = true;
@@ -702,20 +828,25 @@ class GameEngine extends ChangeNotifier {
       }
     }
 
+    if (doubleYield && !inventoryFullError) {
+      log("✨ Masterwork Perk: Yield quantities doubled!", LogType.success);
+    }
+
     if (inventoryFullError) {
       log("Your inventory is full! Some items were dropped.", LogType.error);
     }
 
     // Success logs
+    final displayXp = ((action.requiredSkill != null ? action.xpReward : 0.0) * getXpMultiplier()).toInt();
     if (action.id == 'inn_rest') {
       log("You feel rested and energized. Health and energy fully restored.", LogType.success);
     } else if (action.id == 'shelter_rest') {
-      log("You rested in the shelter. Health and energy recovered (+5 Wayfinding XP).", LogType.success);
+      log("You rested in the shelter. Health and energy recovered (+${((action.xpReward > 0 ? action.xpReward : 5.0) * getXpMultiplier()).toInt()} Wayfinding XP).", LogType.success);
     } else if (action.id == 'chat_townsfolk') {
-      log("You learned some local history (+12 Lore XP).", LogType.success);
+      log("You learned some local history (+${((action.xpReward > 0 ? action.xpReward : 12.0) * getXpMultiplier()).toInt()} Lore XP).", LogType.success);
     } else {
       String skillName = action.requiredSkill != null ? action.requiredSkill!.name : 'General';
-      log("Success! Finished ${action.name} (+${action.xpReward.toInt()} $skillName XP).", LogType.success);
+      log("Success! Finished ${action.name} (+${displayXp} $skillName XP).", LogType.success);
     }
 
     // Handle progressive exploration zone unlock actions
@@ -726,7 +857,15 @@ class GameEngine extends ChangeNotifier {
       
       final currentProgress = _explorationProgress[action.id] ?? 0.0;
       if (currentProgress < 1.0) {
-        final newProgress = min(1.0, currentProgress + 0.25);
+        double increment = 0.25;
+        final wayfindingSkill = _skills[SkillType.wayfinding];
+        if (wayfindingSkill != null && wayfindingSkill.levelCap > 20) {
+          if (_random.nextDouble() <= 0.15) {
+            increment = 0.50;
+            log("🗺️ Void Wanderer Perk! Double exploration progress achieved!", LogType.success);
+          }
+        }
+        final newProgress = min(1.0, currentProgress + increment);
         _explorationProgress[action.id] = newProgress;
         
         if (newProgress >= 1.0) {
@@ -870,15 +1009,31 @@ class GameEngine extends ChangeNotifier {
 
     _inventory = _inventory.removeItem(item.id, 1);
 
-    int newHealth = min(_playerStats.maxHealth, _playerStats.currentHealth + item.healAmount);
-    int newEnergy = min(_playerStats.maxEnergy, _playerStats.currentEnergy + item.energyAmount);
+    // Apply cooking skill restoration multiplier
+    final cookingSkill = _skills[SkillType.cooking];
+    double foodMultiplier = 1.0;
+    if (cookingSkill != null) {
+      foodMultiplier += (cookingSkill.level - 1) * 0.015; // +1.5% per level above 1
+      if (cookingSkill.levelCap > 10) {
+        foodMultiplier += 0.15; // Lvl 10 Perk (+15%)
+      }
+      if (cookingSkill.levelCap > 20) {
+        foodMultiplier += 0.30; // Lvl 20 Perk (+30%)
+      }
+    }
+
+    int healed = (item.healAmount * foodMultiplier).round();
+    int energyRestored = (item.energyAmount * foodMultiplier).round();
+
+    int newHealth = min(_playerStats.maxHealth, _playerStats.currentHealth + healed);
+    int newEnergy = min(_playerStats.maxEnergy, _playerStats.currentEnergy + energyRestored);
 
     _playerStats = _playerStats.copyWith(
       currentHealth: newHealth,
       currentEnergy: newEnergy,
     );
 
-    log("Consumed ${item.icon} ${item.name} (Restored +${item.healAmount} HP, +${item.energyAmount} Energy).", LogType.success);
+    log("Consumed ${item.icon} ${item.name} (Restored +$healed HP, +$energyRestored Energy).", LogType.success);
     notifyListeners();
   }
 

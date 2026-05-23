@@ -125,6 +125,57 @@ class SkillState {
     );
   }
 
+  bool get isPerk10Unlocked => levelCap > 10;
+  bool get isPerk20Unlocked => levelCap > 20;
+
+  String get perk10Name {
+    switch (type) {
+      case SkillType.woodcutting: return 'Ironbark Feller';
+      case SkillType.mining: return 'Glinting Miner';
+      case SkillType.herbalism: return 'Philter Specialist';
+      case SkillType.wayfinding: return 'Outpost Pathfinder';
+      case SkillType.lore: return 'Obelisk Interpreter';
+      case SkillType.cooking: return 'Inn Sous-Chef';
+      case SkillType.crafting: return 'Journeyman Smith';
+    }
+  }
+
+  String get perk10Desc {
+    switch (type) {
+      case SkillType.woodcutting: return 'Woodcutting speed +20%, woodcutting energy cost -2, and immune to bare-handed woodcutting damage.';
+      case SkillType.mining: return 'Mining speed +20%, mining energy cost -3, and immune to bare-handed mining damage.';
+      case SkillType.herbalism: return 'Herbalism speed +20%, foraging energy cost -1, and immune to bare-handed foraging damage.';
+      case SkillType.wayfinding: return 'Wayfinding actions speed +20% and exploration energy cost -2.';
+      case SkillType.lore: return 'Lore actions speed +20% and +15% XP bonus to ALL skills.';
+      case SkillType.cooking: return 'Cooking speed +20% and all consumed food restores +15% health & energy.';
+      case SkillType.crafting: return 'Crafting speed +20% and crafting energy cost -1.';
+    }
+  }
+
+  String get perk20Name {
+    switch (type) {
+      case SkillType.woodcutting: return 'Timber Lord';
+      case SkillType.mining: return 'Deep Core Quarryman';
+      case SkillType.herbalism: return 'Bloom Whisperer';
+      case SkillType.wayfinding: return 'Void Wanderer';
+      case SkillType.lore: return 'Sage of Ages';
+      case SkillType.cooking: return 'Master Culinarian';
+      case SkillType.crafting: return 'Star Forge Artisan';
+    }
+  }
+
+  String get perk20Desc {
+    switch (type) {
+      case SkillType.woodcutting: return 'Woodcutting speed +30% and a 15% chance to double woodcutting loot yields.';
+      case SkillType.mining: return 'Mining speed +30% and a 15% chance to double mining loot yields.';
+      case SkillType.herbalism: return 'Herbalism speed +30% and a 15% chance to double foraging loot yields.';
+      case SkillType.wayfinding: return 'Wayfinding actions speed +30% and a 15% chance to double exploration progress.';
+      case SkillType.lore: return 'Lore actions speed +30% and +25% XP bonus to ALL skills.';
+      case SkillType.cooking: return 'Cooking speed +30%, food eaten restores +30% health & energy, and +20% chance to double cooking output.';
+      case SkillType.crafting: return 'Crafting speed +30% and a 15% chance to save all inputs when crafting.';
+    }
+  }
+
   /// Unlock the level cap by 10 levels
   SkillState unlockCap() {
     return SkillState(
@@ -134,6 +185,7 @@ class SkillState {
       levelCap: levelCap + 10,
     );
   }
+
 
   SkillState copyWith({
     SkillType? type,

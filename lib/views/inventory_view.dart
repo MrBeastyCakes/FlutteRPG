@@ -1206,11 +1206,11 @@ class _InventoryViewState extends State<InventoryView> with SingleTickerProvider
                 const SizedBox(height: 12),
                 
                 // Stat Rows
-                _buildStatSheetRow(SkillType.woodcutting, equippedTools[SkillType.woodcutting]),
+                _buildStatSheetRow(context, engine, SkillType.woodcutting, equippedTools[SkillType.woodcutting]),
                 const SizedBox(height: 10),
-                _buildStatSheetRow(SkillType.mining, equippedTools[SkillType.mining]),
+                _buildStatSheetRow(context, engine, SkillType.mining, equippedTools[SkillType.mining]),
                 const SizedBox(height: 10),
-                _buildStatSheetRow(SkillType.herbalism, equippedTools[SkillType.herbalism]),
+                _buildStatSheetRow(context, engine, SkillType.herbalism, equippedTools[SkillType.herbalism]),
               ],
             ),
           ),
@@ -1244,8 +1244,11 @@ class _InventoryViewState extends State<InventoryView> with SingleTickerProvider
     );
   }
 
-  Widget _buildStatSheetRow(SkillType skill, Item? tool) {
+  Widget _buildStatSheetRow(BuildContext context, GameEngine engine, SkillType skill, Item? tool) {
     final skillColor = GameTheme.getSkillColor(skill);
+    final speedBonus = (engine.getSkillSpeedBonus(skill) * 100).toInt();
+    final successBonus = (engine.getSkillSuccessBonus(skill) * 100).toInt();
+
     return Row(
       children: [
         Text(skill.icon, style: const TextStyle(fontSize: 18)),
@@ -1276,17 +1279,17 @@ class _InventoryViewState extends State<InventoryView> with SingleTickerProvider
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
             Text(
-              '🏎️ Speed: +${((tool?.speedBonus ?? 0.0) * 100).toInt()}%',
-              style: TextStyle(
-                color: tool != null ? Colors.greenAccent : GameTheme.textMuted,
+              '🏎️ Speed: +$speedBonus%',
+              style: const TextStyle(
+                color: Colors.greenAccent,
                 fontSize: 12,
                 fontWeight: FontWeight.bold,
               ),
             ),
             Text(
-              '🎯 Success: +${((tool?.successBonus ?? 0.0) * 100).toInt()}%',
-              style: TextStyle(
-                color: tool != null ? Colors.blueAccent : GameTheme.textMuted,
+              '🎯 Success: +$successBonus%',
+              style: const TextStyle(
+                color: Colors.blueAccent,
                 fontSize: 12,
                 fontWeight: FontWeight.bold,
               ),
