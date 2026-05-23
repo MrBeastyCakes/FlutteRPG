@@ -34,6 +34,52 @@ class Recipe {
 }
 
 class Recipes {
+  // Basic Tools
+  static const Recipe stoneAxe = Recipe(
+    id: 'stone_axe',
+    name: 'Stone Axe',
+    icon: '🪓',
+    description: 'Assemble a basic stone axe from logs and clay.',
+    resultItemId: 'stone_axe',
+    resultQuantity: 1,
+    requiredSkill: SkillType.crafting,
+    requiredLevel: 1,
+    xpReward: 15.0,
+    inputs: {'oak_log': 3, 'river_clay': 2},
+    energyCost: 3,
+    durationSeconds: 3,
+  );
+
+  static const Recipe stonePickaxe = Recipe(
+    id: 'stone_pickaxe',
+    name: 'Stone Pickaxe',
+    icon: '⛏️',
+    description: 'Assemble a basic stone pickaxe from logs and clay.',
+    resultItemId: 'stone_pickaxe',
+    resultQuantity: 1,
+    requiredSkill: SkillType.crafting,
+    requiredLevel: 1,
+    xpReward: 15.0,
+    inputs: {'oak_log': 3, 'river_clay': 2},
+    energyCost: 3,
+    durationSeconds: 3,
+  );
+
+  static const Recipe foragingGloves = Recipe(
+    id: 'foraging_gloves',
+    name: 'Foraging Gloves',
+    icon: '🧤',
+    description: 'Stitch basic leather gloves with river clay and wildflowers.',
+    resultItemId: 'foraging_gloves',
+    resultQuantity: 1,
+    requiredSkill: SkillType.crafting,
+    requiredLevel: 1,
+    xpReward: 15.0,
+    inputs: {'wildflower': 3, 'river_clay': 2},
+    energyCost: 3,
+    durationSeconds: 3,
+  );
+
   // Woodcutting Tools
   static const Recipe copperAxe = Recipe(
     id: 'copper_axe',
@@ -166,7 +212,7 @@ class Recipes {
     resultItemId: 'baked_potato',
     resultQuantity: 1,
     requiredSkill: SkillType.cooking,
-    requiredLevel: 5,
+    requiredLevel: 1,
     xpReward: 20.0,
     inputs: {'raw_potato': 1, 'oak_log': 1},
     energyCost: 2,
@@ -212,7 +258,7 @@ class Recipes {
     resultItemId: 'cooked_fish',
     resultQuantity: 1,
     requiredSkill: SkillType.cooking,
-    requiredLevel: 3,
+    requiredLevel: 1,
     xpReward: 22.0,
     inputs: {'raw_trout': 1, 'oak_log': 1},
     energyCost: 3,
@@ -412,6 +458,9 @@ class Recipes {
   }
 
   static const List<Recipe> all = [
+    stoneAxe,
+    stonePickaxe,
+    foragingGloves,
     copperAxe,
     bronzeAxe,
     ironAxe,

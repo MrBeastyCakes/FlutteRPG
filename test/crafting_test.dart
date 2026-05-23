@@ -184,7 +184,7 @@ void main() {
     });
 
     test('Potato cooking recipe upgrade structures', () {
-      expect(Recipes.bakedPotato.requiredLevel, 5);
+      expect(Recipes.bakedPotato.requiredLevel, 1);
       expect(Recipes.bakedPotato.inputs['raw_potato'], 1);
       expect(Recipes.bakedPotato.inputs['oak_log'], 1);
 
@@ -198,7 +198,7 @@ void main() {
     });
 
     test('Trout cooking and smoking structures', () {
-      expect(Recipes.cookedTrout.requiredLevel, 3);
+      expect(Recipes.cookedTrout.requiredLevel, 1);
       expect(Recipes.cookedTrout.inputs['raw_trout'], 1);
       expect(Recipes.cookedTrout.inputs['oak_log'], 1);
       expect(Recipes.cookedTrout.resultItemId, 'cooked_fish');
