@@ -8,31 +8,46 @@ import '../models/item.dart';
 import '../models/inventory.dart';
 import '../models/zone.dart';
 import '../models/masterwork.dart';
+import '../models/recipe.dart';
+import '../models/structure.dart';
 import 'activity_log.dart';
 
 class ActiveActionState {
-  final ZoneAction action;
+  final ZoneAction? action;
+  final Recipe? recipe;
+  final Structure? structure;
+  final String? targetZoneId;
   final double progress; // 0.0 to 1.0
   final double durationSeconds;
 
   const ActiveActionState({
-    required this.action,
+    this.action,
+    this.recipe,
+    this.structure,
+    this.targetZoneId,
     required this.progress,
     required this.durationSeconds,
   });
 
   ActiveActionState copyWith({
     ZoneAction? action,
+    Recipe? recipe,
+    Structure? structure,
+    String? targetZoneId,
     double? progress,
     double? durationSeconds,
   }) {
     return ActiveActionState(
       action: action ?? this.action,
+      recipe: recipe ?? this.recipe,
+      structure: structure ?? this.structure,
+      targetZoneId: targetZoneId ?? this.targetZoneId,
       progress: progress ?? this.progress,
       durationSeconds: durationSeconds ?? this.durationSeconds,
     );
   }
 }
+
 
 class MasterworkRunState {
   final MasterworkTask task;
@@ -62,6 +77,16 @@ class GameEngine extends ChangeNotifier {
   Inventory _inventory = Inventory.initial();
   Zone _currentZone = Zones.townSquare;
   final List<LogEntry> _logs = [];
+  final Set<String> _unlockedZoneIds = {'town_square'};
+  final Map<String, double> _explorationProgress = {
+    'explore_forest_paths': 0.0,
+    'explore_rocky_trails': 0.0,
+    'explore_deep_woods': 0.0,
+    'explore_lower_shafts': 0.0,
+  };
+
+  int _maxEquipmentSlots = 1;
+  final Map<SkillType, Item> _equippedTools = {};
 
   ActiveActionState? _activeAction;
   Timer? _actionTimer;
@@ -69,6 +94,7 @@ class GameEngine extends ChangeNotifier {
   MasterworkRunState? _activeMasterwork;
 
   final Random _random = Random();
+  final Map<String, List<String>> _zoneStructures = {};
 
   GameEngine() {
     // Initialize skills
@@ -82,12 +108,108 @@ class GameEngine extends ChangeNotifier {
 
   // Getters
   PlayerStats get playerStats => _playerStats;
+  set playerStats(PlayerStats val) {
+    _playerStats = val;
+    notifyListeners();
+  }
+
   Map<SkillType, SkillState> get skills => _skills;
+  
   Inventory get inventory => _inventory;
+  set inventory(Inventory val) {
+    _inventory = val;
+    notifyListeners();
+  }
+
+  Map<String, List<String>> get zoneStructures => _zoneStructures;
+
+  List<String> getBuiltStructuresForZone(String zoneId) {
+    return _zoneStructures[zoneId] ?? [];
+  }
+
+  bool hasStructureInZone(String zoneId, String structureId) {
+    return _zoneStructures[zoneId]?.contains(structureId) ?? false;
+  }
+
+  int get maxEquipmentSlots => _maxEquipmentSlots;
+  Map<SkillType, Item> get equippedTools => _equippedTools;
+
+  void equipTool(Item item) {
+    if (!item.isTool || item.toolSkill == null) {
+      log("This item cannot be equipped as a tool!", LogType.error);
+      return;
+    }
+
+    final skill = item.toolSkill!;
+
+    // Verify if we have the item in inventory
+    if (!_inventory.hasItem(item.id, 1)) {
+      log("You don't have this tool in your inventory!", LogType.error);
+      return;
+    }
+
+    // Check slots restriction if it's a new skill slot
+    if (!_equippedTools.containsKey(skill) && _equippedTools.length >= _maxEquipmentSlots) {
+      log("All equipment slots full ($_maxEquipmentSlots/$_maxEquipmentSlots)! Unequip a tool first or upgrade your backpack.", LogType.error);
+      return;
+    }
+
+    cancelAction();
+
+    // Remove tool from inventory
+    _inventory = _inventory.removeItem(item.id, 1);
+
+    // Save previous tool if any
+    final oldTool = _equippedTools[skill];
+
+    // Equip new tool
+    _equippedTools[skill] = item;
+    log("Equipped ${item.icon} ${item.name} for ${skill.name}.", LogType.success);
+
+    // Return previous tool to inventory
+    if (oldTool != null) {
+      _inventory = _inventory.addItem(oldTool, 1);
+      log("Returned ${oldTool.icon} ${oldTool.name} to inventory.", LogType.info);
+    }
+
+    notifyListeners();
+  }
+
+  void unequipTool(SkillType skill) {
+    final tool = _equippedTools[skill];
+    if (tool == null) {
+      log("No tool equipped for ${skill.name}.", LogType.error);
+      return;
+    }
+
+    if (_inventory.isFull) {
+      log("Inventory full! Free some slots first to unequip ${tool.name}.", LogType.error);
+      return;
+    }
+
+    cancelAction();
+
+    _equippedTools.remove(skill);
+    _inventory = _inventory.addItem(tool, 1);
+    log("Unequipped ${tool.icon} ${tool.name} for ${skill.name}.", LogType.success);
+
+    notifyListeners();
+  }
+
   Zone get currentZone => _currentZone;
+  Set<String> get unlockedZoneIds => _unlockedZoneIds;
+  Map<String, double> get explorationProgress => _explorationProgress;
   List<LogEntry> get logs => List.unmodifiable(_logs);
   ActiveActionState? get activeAction => _activeAction;
   MasterworkRunState? get activeMasterwork => _activeMasterwork;
+
+
+  List<Recipe> getAvailableRecipes() {
+    return [
+      ...Recipes.all,
+      Recipes.getBackpackRecipe(_inventory.capacity),
+    ];
+  }
 
   // Logging helper
   void log(String message, [LogType type = LogType.info]) {
@@ -105,6 +227,10 @@ class GameEngine extends ChangeNotifier {
   // Travel
   void travelTo(Zone zone) {
     if (zone.id == _currentZone.id) return;
+    if (!_unlockedZoneIds.contains(zone.id)) {
+      log("You cannot travel to ${zone.name} yet! It is locked.", LogType.error);
+      return;
+    }
     
     // Stop current action
     cancelAction();
@@ -112,6 +238,14 @@ class GameEngine extends ChangeNotifier {
 
     _currentZone = zone;
     log("Traveled to ${zone.name}.", LogType.info);
+    notifyListeners();
+  }
+
+  void unlockZone(String zoneId) {
+    if (_unlockedZoneIds.contains(zoneId)) return;
+    _unlockedZoneIds.add(zoneId);
+    final zone = Zones.findById(zoneId);
+    log("🗺️ New Zone Discovered: ${zone.name}!", LogType.success);
     notifyListeners();
   }
 
@@ -152,9 +286,9 @@ class GameEngine extends ChangeNotifier {
     // Calculate speed bonus from equipped tools
     double speedBonus = 0.0;
     if (action.requiredSkill != null) {
-      final bestTool = _inventory.getBestToolFor(action.requiredSkill!);
-      if (bestTool != null) {
-        speedBonus = bestTool.speedBonus;
+      final equippedTool = _equippedTools[action.requiredSkill!];
+      if (equippedTool != null) {
+        speedBonus = equippedTool.speedBonus;
       }
     }
 
@@ -192,6 +326,179 @@ class GameEngine extends ChangeNotifier {
     });
   }
 
+  bool canCraftRecipe(Recipe recipe) {
+    if (_currentZone.id == 'town_square') return true;
+    final structures = _zoneStructures[_currentZone.id] ?? [];
+    if (recipe.requiredSkill == SkillType.crafting || recipe.requiredSkill == SkillType.lore) {
+      return structures.contains('crafting_bench');
+    }
+    if (recipe.requiredSkill == SkillType.cooking || recipe.requiredSkill == SkillType.herbalism) {
+      return structures.contains('field_kitchen');
+    }
+    return false;
+  }
+
+  void startCrafting(Recipe recipe) {
+    // 0. Location check: Crafting/cooking only allowed in Town Square or with appropriate local structure
+    if (!canCraftRecipe(recipe)) {
+      final structureName = (recipe.requiredSkill == SkillType.crafting || recipe.requiredSkill == SkillType.lore)
+          ? 'Crafting Bench'
+          : 'Field Kitchen';
+      log("You need a $structureName to craft or cook here!", LogType.error);
+      return;
+    }
+
+    // 1. Skill requirement check
+    final skill = _skills[recipe.requiredSkill];
+    if (skill == null || skill.level < recipe.requiredLevel) {
+      log("Requirements not met: Needs Level ${recipe.requiredLevel} ${recipe.requiredSkill.name}.", LogType.error);
+      return;
+    }
+
+    // 2. Gate check (Masterwork lock)
+    if (skill.isGated) {
+      log("Level Capped! Complete the Level ${skill.levelCap} Masterwork Trial to continue.", LogType.warning);
+      return;
+    }
+
+    // 3. Energy check
+    if (recipe.energyCost > 0 && _playerStats.currentEnergy < recipe.energyCost) {
+      log("Not enough energy! Rest at the Town Inn or eat food.", LogType.error);
+      return;
+    }
+
+    // 4. Ingredients check
+    for (var entry in recipe.inputs.entries) {
+      final itemId = entry.key;
+      final requiredQty = entry.value;
+      if (!_inventory.hasItem(itemId, requiredQty)) {
+        final item = Items.findById(itemId);
+        final itemName = item != null ? item.name : itemId;
+        log("Not enough ingredients! Missing: $itemName x$requiredQty.", LogType.error);
+        return;
+      }
+    }
+
+    // Cancel previous
+    cancelAction();
+
+    // Consume ingredients immediately
+    for (var entry in recipe.inputs.entries) {
+      _inventory = _inventory.removeItem(entry.key, entry.value);
+    }
+
+    double duration = recipe.durationSeconds.toDouble();
+    if (duration < 1.0) duration = 1.0;
+
+    _activeAction = ActiveActionState(
+      recipe: recipe,
+      progress: 0.0,
+      durationSeconds: duration,
+    );
+    notifyListeners();
+
+    // Start 100ms updates
+    const tickMs = 100;
+    final totalTicks = (duration * 1000) / tickMs;
+    int currentTick = 0;
+
+    _actionTimer = Timer.periodic(const Duration(milliseconds: tickMs), (timer) {
+      currentTick++;
+      double progress = currentTick / totalTicks;
+
+      if (progress >= 1.0) {
+        _activeAction = _activeAction!.copyWith(progress: 1.0);
+        timer.cancel();
+        _completeAction();
+      } else {
+        _activeAction = _activeAction!.copyWith(progress: progress);
+        notifyListeners();
+      }
+    });
+  }
+
+  void startBuilding(Structure structure, String zoneId) {
+    if (zoneId == 'town_square') {
+      log("You cannot build structures in the Town Square!", LogType.error);
+      return;
+    }
+
+    if (hasStructureInZone(zoneId, structure.id)) {
+      log("You have already built a ${structure.name} in this zone!", LogType.error);
+      return;
+    }
+
+    // 1. Skill requirement check
+    final skill = _skills[structure.requiredSkill];
+    if (skill == null || skill.level < structure.requiredLevel) {
+      log("Requirements not met: Needs Level ${structure.requiredLevel} ${structure.requiredSkill.name}.", LogType.error);
+      return;
+    }
+
+    // 2. Gate check (Masterwork lock)
+    if (skill.isGated) {
+      log("Level Capped! Complete the Level ${skill.levelCap} Masterwork Trial to continue.", LogType.warning);
+      return;
+    }
+
+    // 3. Energy check
+    if (structure.energyCost > 0 && _playerStats.currentEnergy < structure.energyCost) {
+      log("Not enough energy! Rest or eat food.", LogType.error);
+      return;
+    }
+
+    // 4. Ingredients check
+    for (var entry in structure.cost.entries) {
+      final itemId = entry.key;
+      final requiredQty = entry.value;
+      if (!_inventory.hasItem(itemId, requiredQty)) {
+        final item = Items.findById(itemId);
+        final itemName = item != null ? item.name : itemId;
+        log("Not enough ingredients! Missing: $itemName x$requiredQty.", LogType.error);
+        return;
+      }
+    }
+
+    // Cancel previous
+    cancelAction();
+
+    // Consume ingredients immediately
+    for (var entry in structure.cost.entries) {
+      _inventory = _inventory.removeItem(entry.key, entry.value);
+    }
+
+    double duration = structure.durationSeconds.toDouble();
+    if (duration < 1.0) duration = 1.0;
+
+    _activeAction = ActiveActionState(
+      structure: structure,
+      targetZoneId: zoneId,
+      progress: 0.0,
+      durationSeconds: duration,
+    );
+    notifyListeners();
+
+    // Start 100ms updates
+    const tickMs = 100;
+    final totalTicks = (duration * 1000) / tickMs;
+    int currentTick = 0;
+
+    _actionTimer = Timer.periodic(const Duration(milliseconds: tickMs), (timer) {
+      currentTick++;
+      double progress = currentTick / totalTicks;
+
+      if (progress >= 1.0) {
+        _activeAction = _activeAction!.copyWith(progress: 1.0);
+        timer.cancel();
+        _completeAction();
+      } else {
+        _activeAction = _activeAction!.copyWith(progress: progress);
+        notifyListeners();
+      }
+    });
+  }
+
+
   void cancelAction() {
     _actionTimer?.cancel();
     _activeAction = null;
@@ -200,7 +507,80 @@ class GameEngine extends ChangeNotifier {
 
   void _completeAction() {
     if (_activeAction == null) return;
-    final action = _activeAction!.action;
+
+    if (_activeAction!.structure != null) {
+      final structure = _activeAction!.structure!;
+      final zoneId = _activeAction!.targetZoneId!;
+
+      // Deduct Energy
+      int newEnergy = _playerStats.currentEnergy - structure.energyCost;
+      newEnergy = newEnergy.clamp(0, _playerStats.maxEnergy);
+      _playerStats = _playerStats.copyWith(currentEnergy: newEnergy);
+
+      // Award XP
+      final oldSkill = _skills[structure.requiredSkill]!;
+      final newSkill = oldSkill.addXp(structure.xpReward);
+      _skills[structure.requiredSkill] = newSkill;
+
+      if (newSkill.level > oldSkill.level) {
+        log("Level Up! Your ${structure.requiredSkill.name} is now Level ${newSkill.level}!", LogType.levelUp);
+      } else if (newSkill.isGated && !oldSkill.isGated) {
+        log("Limit Reached! Level ${newSkill.levelCap} Masterwork Trial is now unlocked. Check the Skills tab.", LogType.warning);
+      }
+
+      // Add to structures list for that zone
+      if (!_zoneStructures.containsKey(zoneId)) {
+        _zoneStructures[zoneId] = [];
+      }
+      if (!_zoneStructures[zoneId]!.contains(structure.id)) {
+        _zoneStructures[zoneId]!.add(structure.id);
+      }
+
+      log("Success! Finished building ${structure.name} (+${structure.xpReward.toInt()} ${structure.requiredSkill.name} XP).", LogType.success);
+
+      _activeAction = null;
+      notifyListeners();
+      return;
+    }
+
+    if (_activeAction!.recipe != null) {
+      final recipe = _activeAction!.recipe!;
+
+      // Deduct Energy
+      int newEnergy = _playerStats.currentEnergy - recipe.energyCost;
+      newEnergy = newEnergy.clamp(0, _playerStats.maxEnergy);
+      _playerStats = _playerStats.copyWith(currentEnergy: newEnergy);
+
+      // Award XP
+      final oldSkill = _skills[recipe.requiredSkill]!;
+      final newSkill = oldSkill.addXp(recipe.xpReward);
+      _skills[recipe.requiredSkill] = newSkill;
+
+      if (newSkill.level > oldSkill.level) {
+        log("Level Up! Your ${recipe.requiredSkill.name} is now Level ${newSkill.level}!", LogType.levelUp);
+      } else if (newSkill.isGated && !oldSkill.isGated) {
+        log("Limit Reached! Level ${newSkill.levelCap} Masterwork Trial is now unlocked. Check the Skills tab.", LogType.warning);
+      }
+
+      // Award result item
+      final resultItem = recipe.resultItem;
+      if (resultItem != null) {
+        if (_inventory.isFull) {
+          log("Your inventory is full! The ${resultItem.name} was dropped.", LogType.error);
+        } else {
+          _inventory = _inventory.addItem(resultItem, recipe.resultQuantity);
+          log("Crafted: ${resultItem.icon} ${resultItem.name} x${recipe.resultQuantity}", LogType.success);
+        }
+      }
+
+      log("Success! Finished crafting ${recipe.name} (+${recipe.xpReward.toInt()} ${recipe.requiredSkill.name} XP).", LogType.success);
+
+      _activeAction = null;
+      notifyListeners();
+      return;
+    }
+
+    final action = _activeAction!.action!;
 
     // Deduct/Recover Energy
     int newEnergy = _playerStats.currentEnergy - action.energyCost;
@@ -238,6 +618,43 @@ class GameEngine extends ChangeNotifier {
       _playerStats = _playerStats.copyWith(currentHealth: newHealth);
     }
 
+    // Bare-handed harvesting check
+    bool hasRequiredTool = true;
+    if (action.requiredSkill != null) {
+      final isHarvestingSkill = action.requiredSkill == SkillType.woodcutting ||
+          action.requiredSkill == SkillType.mining ||
+          action.requiredSkill == SkillType.herbalism;
+          
+      if (isHarvestingSkill) {
+        final equippedTool = _equippedTools[action.requiredSkill!];
+        if (equippedTool == null) {
+          hasRequiredTool = false;
+          
+          int bareDamage = 0;
+          String damageReason = "";
+          if (action.requiredSkill == SkillType.woodcutting) {
+            bareDamage = 5;
+            damageReason = "bruised knuckles and wood splinters";
+          } else if (action.requiredSkill == SkillType.mining) {
+            bareDamage = 8;
+            damageReason = "cut fingers and sharp stone shards";
+          } else if (action.requiredSkill == SkillType.herbalism) {
+            bareDamage = 3;
+            damageReason = "thorn pricks and skin irritation";
+          }
+          
+          int bareHealth = max(0, _playerStats.currentHealth - bareDamage);
+          _playerStats = _playerStats.copyWith(currentHealth: bareHealth);
+          log("🩹 Ouch! Harvesting ${action.requiredSkill!.name.toLowerCase()} with your bare hands dealt $bareDamage damage ($damageReason)!", LogType.warning);
+          
+          if (_playerStats.isDead) {
+            faint();
+            return;
+          }
+        }
+      }
+    }
+
     // Award XP
     if (action.requiredSkill != null) {
       final oldSkill = _skills[action.requiredSkill!]!;
@@ -253,9 +670,24 @@ class GameEngine extends ChangeNotifier {
 
     // Roll Loot table
     bool inventoryFullError = false;
+    
+    // Retrieve success bonus from equipped tool
+    double successBonus = 0.0;
+    if (action.requiredSkill != null) {
+      final equippedTool = _equippedTools[action.requiredSkill!];
+      if (equippedTool != null) {
+        successBonus = equippedTool.successBonus;
+      }
+    }
+
     for (var loot in action.lootTable) {
       final roll = _random.nextDouble();
-      if (roll <= loot.chance) {
+      double finalChance = loot.chance + successBonus + _currentZone.successModifier;
+      if (!hasRequiredTool) {
+        finalChance = finalChance - 0.30;
+        if (finalChance < 0.10) finalChance = 0.10;
+      }
+      if (roll <= finalChance) {
         int qty = loot.minQuantity;
         if (loot.maxQuantity > loot.minQuantity) {
           qty = loot.minQuantity + _random.nextInt(loot.maxQuantity - loot.minQuantity + 1);
@@ -277,11 +709,154 @@ class GameEngine extends ChangeNotifier {
     // Success logs
     if (action.id == 'inn_rest') {
       log("You feel rested and energized. Health and energy fully restored.", LogType.success);
+    } else if (action.id == 'shelter_rest') {
+      log("You rested in the shelter. Health and energy recovered (+5 Wayfinding XP).", LogType.success);
     } else if (action.id == 'chat_townsfolk') {
       log("You learned some local history (+12 Lore XP).", LogType.success);
     } else {
       String skillName = action.requiredSkill != null ? action.requiredSkill!.name : 'General';
       log("Success! Finished ${action.name} (+${action.xpReward.toInt()} $skillName XP).", LogType.success);
+    }
+
+    // Handle progressive exploration zone unlock actions
+    if (action.id == 'explore_forest_paths' ||
+        action.id == 'explore_rocky_trails' ||
+        action.id == 'explore_deep_woods' ||
+        action.id == 'explore_lower_shafts') {
+      
+      final currentProgress = _explorationProgress[action.id] ?? 0.0;
+      if (currentProgress < 1.0) {
+        final newProgress = min(1.0, currentProgress + 0.25);
+        _explorationProgress[action.id] = newProgress;
+        
+        if (newProgress >= 1.0) {
+          // Milestone reach: unlock zone and award discovery chest!
+          if (action.id == 'explore_forest_paths') {
+            unlockZone('whispering_woods_1');
+            
+            _playerStats = _playerStats.copyWith(gold: _playerStats.gold + 10);
+            _inventory = _inventory.addItem(Items.wildBerries, 5);
+            _inventory = _inventory.addItem(Items.oakLog, 5);
+            _inventory = _inventory.addItem(Items.wildflower, 2);
+            log("🎁 DISCOVERY CHEST: You charted a path to the Whispering Woods! Found 10 Gold, 5 Wild Berries, 5 Oak Logs, and 2 Wildflowers!", LogType.success);
+          } else if (action.id == 'explore_rocky_trails') {
+            unlockZone('darkstone_mine_1');
+            
+            _playerStats = _playerStats.copyWith(gold: _playerStats.gold + 10);
+            _inventory = _inventory.addItem(Items.copperOre, 5);
+            _inventory = _inventory.addItem(Items.tinOre, 3);
+            _inventory = _inventory.addItem(Items.wildBerries, 3);
+            log("🎁 DISCOVERY CHEST: You charted a path to the Darkstone Mine! Found 10 Gold, 5 Copper Ore, 3 Tin Ore, and 3 Wild Berries!", LogType.success);
+          } else if (action.id == 'explore_deep_woods') {
+            unlockZone('whispering_woods_2');
+            
+            _playerStats = _playerStats.copyWith(gold: _playerStats.gold + 100);
+            _inventory = _inventory.addItem(Items.leatherBackpack, 1);
+            _inventory = _inventory.addItem(Items.willowLog, 3);
+            log("🎁 DISCOVERY CHEST: You successfully charted the Deep Woods Canopy! Found 100 Gold, 1 Leather Backpack, and 3 Willow Logs!", LogType.success);
+          } else if (action.id == 'explore_lower_shafts') {
+            unlockZone('darkstone_mine_2');
+            
+            _playerStats = _playerStats.copyWith(gold: _playerStats.gold + 100);
+            _inventory = _inventory.addItem(Items.backpackUpgrade, 1);
+            _inventory = _inventory.addItem(Items.ironOre, 3);
+            log("🎁 DISCOVERY CHEST: You successfully charted the Lower Caverns! Found 100 Gold, 1 Backpack Upgrade, and 3 Iron Ore!", LogType.success);
+          }
+        } else {
+          // Progressive step: Roll on Random Exploration Loot Table!
+          String pathName = "";
+          if (action.id == 'explore_forest_paths') {
+            pathName = "Forest Paths";
+            
+            final roll = _random.nextDouble();
+            if (roll < 0.40) {
+              final goldAmt = 5 + _random.nextInt(8);
+              _playerStats = _playerStats.copyWith(gold: _playerStats.gold + goldAmt);
+              log("🔍 Exploration Event: You found a small purse with $goldAmt Gold along the trail!", LogType.success);
+            } else if (roll < 0.70) {
+              final qty = 1 + _random.nextInt(3);
+              _inventory = _inventory.addItem(Items.wildBerries, qty);
+              log("🔍 Exploration Event: You gathered $qty Wild Berries from a thicket!", LogType.success);
+            } else if (roll < 0.85) {
+              _inventory = _inventory.addItem(Items.wildflower, 1);
+              log("🔍 Exploration Event: You picked a beautiful Wild Bluebell growing by the rocks.", LogType.success);
+            } else if (roll < 0.95) {
+              _inventory = _inventory.addItem(Items.oakLog, 1);
+              log("🔍 Exploration Event: You snapped a fallen branch into a usable Oak Log.", LogType.success);
+            } else {
+              log("🔍 Exploration Event: You scanned the terrain and noted the local plant life.", LogType.info);
+            }
+            
+          } else if (action.id == 'explore_rocky_trails') {
+            pathName = "Rocky Trails";
+            
+            final roll = _random.nextDouble();
+            if (roll < 0.40) {
+              final goldAmt = 5 + _random.nextInt(8);
+              _playerStats = _playerStats.copyWith(gold: _playerStats.gold + goldAmt);
+              log("🔍 Exploration Event: You found a coin pouch wedged between rocks with $goldAmt Gold!", LogType.success);
+            } else if (roll < 0.70) {
+              final qty = 1 + _random.nextInt(2);
+              _inventory = _inventory.addItem(Items.copperOre, qty);
+              log("🔍 Exploration Event: You chipped $qty Copper Ore from a surface vein!", LogType.success);
+            } else if (roll < 0.85) {
+              _inventory = _inventory.addItem(Items.tinOre, 1);
+              log("🔍 Exploration Event: You spotted a glint of tin in the gravel!", LogType.success);
+            } else if (roll < 0.95) {
+              _inventory = _inventory.addItem(Items.wildBerries, 2);
+              log("🔍 Exploration Event: You found some berries growing in a rocky crevice.", LogType.success);
+            } else {
+              log("🔍 Exploration Event: You surveyed the trail and marked the terrain.", LogType.info);
+            }
+            
+          } else if (action.id == 'explore_deep_woods') {
+            pathName = "Deep Woods Canopy";
+            
+            final roll = _random.nextDouble();
+            if (roll < 0.40) {
+              final goldAmt = 10 + _random.nextInt(16);
+              _playerStats = _playerStats.copyWith(gold: _playerStats.gold + goldAmt);
+              log("🔍 Exploration Event: You found a lost trader pouch with $goldAmt Gold!", LogType.success);
+            } else if (roll < 0.75) {
+              final item = _random.nextBool() ? Items.riverClay : Items.wildflower;
+              final qty = 1 + _random.nextInt(2);
+              _inventory = _inventory.addItem(item, qty);
+              log("🔍 Exploration Event: You unearthed $qty ${item.name} near the marshy banks!", LogType.success);
+            } else if (roll < 0.95) {
+              final qty = 1 + _random.nextInt(2);
+              _inventory = _inventory.addItem(Items.rawTrout, qty);
+              log("🔍 Exploration Event: You caught $qty Raw Trout in a shallow pool!", LogType.success);
+            } else {
+              _inventory = _inventory.addItem(Items.copperAxe, 1);
+              log("🔍 Exploration Event: Rare find! You found a discarded Copper Axe wedged in an old stump!", LogType.success);
+            }
+            
+          } else if (action.id == 'explore_lower_shafts') {
+            pathName = "Lower Caverns";
+            
+            final roll = _random.nextDouble();
+            if (roll < 0.40) {
+              final goldAmt = 10 + _random.nextInt(16);
+              _playerStats = _playerStats.copyWith(gold: _playerStats.gold + goldAmt);
+              log("🔍 Exploration Event: You found an abandoned miner pack with $goldAmt Gold!", LogType.success);
+            } else if (roll < 0.75) {
+              final item = _random.nextBool() ? Items.copperOre : Items.tinOre;
+              final qty = 1 + _random.nextInt(2);
+              _inventory = _inventory.addItem(item, qty);
+              log("🔍 Exploration Event: You chipped loose $qty ${item.name} from an exposed vein!", LogType.success);
+            } else if (roll < 0.95) {
+              final qty = 1 + _random.nextInt(2);
+              _inventory = _inventory.addItem(Items.rawPotato, qty);
+              log("🔍 Exploration Event: You found $qty wild Raw Potatoes in a fertile patch!", LogType.success);
+            } else {
+              _inventory = _inventory.addItem(Items.copperPickaxe, 1);
+              log("🔍 Exploration Event: Rare find! You found a rusty Copper Pickaxe left in a mine cart!", LogType.success);
+            }
+          }
+          
+          log("🗺️ Exploration progress for $pathName increased to ${(newProgress * 100).toInt()}%.", LogType.info);
+        }
+      }
     }
 
     _activeAction = null;
@@ -305,6 +880,36 @@ class GameEngine extends ChangeNotifier {
 
     log("Consumed ${item.icon} ${item.name} (Restored +${item.healAmount} HP, +${item.energyAmount} Energy).", LogType.success);
     notifyListeners();
+  }
+
+  void useItem(Item item) {
+    if (!_inventory.hasItem(item.id, 1)) return;
+
+    if (item.id == 'leather_backpack') {
+      _inventory = _inventory.removeItem(item.id, 1);
+      _inventory = _inventory.copyWith(capacity: _inventory.capacity + 4);
+      log("🎒 You used the Leather Backpack! Your inventory capacity is permanently increased to ${_inventory.capacity} slots.", LogType.success);
+      
+      int prevSlots = _maxEquipmentSlots;
+      _maxEquipmentSlots = (_maxEquipmentSlots + 1).clamp(1, 3);
+      if (_maxEquipmentSlots > prevSlots) {
+        log("🛡️ Your maximum equipment slots increased to $_maxEquipmentSlots!", LogType.success);
+      }
+      notifyListeners();
+    } else if (item.id == 'backpack_upgrade') {
+      _inventory = _inventory.removeItem(item.id, 1);
+      _inventory = _inventory.copyWith(capacity: _inventory.capacity + 1);
+      log("🎒 You used a Backpack Upgrade! Your inventory capacity is permanently increased to ${_inventory.capacity} slots.", LogType.success);
+      
+      int prevSlots = _maxEquipmentSlots;
+      _maxEquipmentSlots = (_maxEquipmentSlots + 1).clamp(1, 3);
+      if (_maxEquipmentSlots > prevSlots) {
+        log("🛡️ Your maximum equipment slots increased to $_maxEquipmentSlots!", LogType.success);
+      }
+      notifyListeners();
+    } else if (item.isFood) {
+      eatFood(item);
+    }
   }
 
   // Merchant operations
@@ -465,6 +1070,37 @@ class GameEngine extends ChangeNotifier {
       log("The merchant charged you $penalty Gold for medical supplies.", LogType.warning);
     }
 
+    notifyListeners();
+  }
+
+  void resetGame() {
+    cancelAction();
+    cancelMasterwork();
+    _playerStats = PlayerStats.initial();
+    _inventory = Inventory.initial();
+    _currentZone = Zones.townSquare;
+    _unlockedZoneIds.clear();
+    _unlockedZoneIds.add('town_square');
+    _zoneStructures.clear();
+    _logs.clear();
+    _activeAction = null;
+    _activeMasterwork = null;
+    _equippedTools.clear();
+    _maxEquipmentSlots = 1;
+    _explorationProgress.clear();
+    _explorationProgress['explore_forest_paths'] = 0.0;
+    _explorationProgress['explore_rocky_trails'] = 0.0;
+    _explorationProgress['explore_deep_woods'] = 0.0;
+    _explorationProgress['explore_lower_shafts'] = 0.0;
+
+    // Re-initialize skills
+    for (var type in SkillType.values) {
+      _skills[type] = SkillState.initial(type);
+    }
+
+    // Add initial logs
+    log("Welcome to Elaria RPG! Set off, gather resources, and level up.", LogType.info);
+    log("Tavern rumor: Complete a Masterwork Trial every 10 levels to break your limits.", LogType.info);
     notifyListeners();
   }
 

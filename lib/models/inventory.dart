@@ -27,8 +27,18 @@ class Inventory {
 
   const Inventory({
     required this.slots,
-    this.capacity = 28,
+    this.capacity = 4,
   });
+
+  Inventory copyWith({
+    List<InventorySlot>? slots,
+    int? capacity,
+  }) {
+    return Inventory(
+      slots: slots ?? this.slots,
+      capacity: capacity ?? this.capacity,
+    );
+  }
 
   int get occupiedSlots => slots.length;
   bool get isFull => occupiedSlots >= capacity;
@@ -49,13 +59,18 @@ class Inventory {
 
   /// Check if the inventory contains a certain quantity of an item
   bool hasItem(String itemId, [int quantity = 1]) {
+    return getItemCount(itemId) >= quantity;
+  }
+
+  /// Get the total count of a specific item in the inventory
+  int getItemCount(String itemId) {
     int count = 0;
     for (var slot in slots) {
       if (slot.item.id == itemId) {
         count += slot.quantity;
       }
     }
-    return count >= quantity;
+    return count;
   }
 
   /// Adds items to the inventory. Returns the new Inventory.
@@ -124,13 +139,9 @@ class Inventory {
   }
 
   factory Inventory.initial() {
-    // Start with a basic stone axe, stone pickaxe, and some berries
+    // Start empty
     return const Inventory(
-      slots: [
-        InventorySlot(item: Items.stoneAxe, quantity: 1),
-        InventorySlot(item: Items.stonePickaxe, quantity: 1),
-        InventorySlot(item: Items.wildBerries, quantity: 5),
-      ],
+      slots: [],
     );
   }
 }

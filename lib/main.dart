@@ -7,7 +7,7 @@ import 'views/dashboard_view.dart';
 import 'views/skills_view.dart';
 import 'views/inventory_view.dart';
 import 'views/zones_view.dart';
-import 'views/lore_view.dart';
+import 'views/build_view.dart';
 import 'models/item.dart';
 
 void main() {
@@ -48,7 +48,7 @@ class _MainGameShellState extends State<MainGameShell> {
     SkillsView(),
     InventoryView(),
     ZonesView(),
-    LoreView(),
+    BuildView(),
   ];
 
   @override
@@ -85,9 +85,52 @@ class _MainGameShellState extends State<MainGameShell> {
         backgroundColor: GameTheme.background,
         elevation: 0,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.restart_alt, color: GameTheme.textMuted, size: 20),
+            tooltip: 'Reset Game',
+            onPressed: () {
+              showDialog(
+                context: context,
+                builder: (BuildContext context) {
+                  return AlertDialog(
+                    backgroundColor: GameTheme.cardBg,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      side: const BorderSide(color: GameTheme.border, width: 1.5),
+                    ),
+                    title: const Text('Reset Game?', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    content: const Text(
+                      'This will permanently delete all your progress, items, gold, and stats. Are you sure you want to start a new game?',
+                      style: TextStyle(color: GameTheme.textLight, fontSize: 14),
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text('Cancel', style: TextStyle(color: GameTheme.textMuted)),
+                      ),
+                      TextButton(
+                        onPressed: () {
+                          engine.resetGame();
+                          Navigator.pop(context);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('🎮 Started a new game!'),
+                              backgroundColor: GameTheme.accentGold,
+                              behavior: SnackBarBehavior.floating,
+                            ),
+                          );
+                        },
+                        child: const Text('Reset', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
+                      ),
+                    ],
+                  );
+                },
+              );
+            },
+          ),
           // Display current zone name in Appbar
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            padding: const EdgeInsets.only(right: 16.0, left: 4.0),
             child: Center(
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -137,8 +180,8 @@ class _MainGameShellState extends State<MainGameShell> {
                   label: 'Travel',
                 ),
                 BottomNavigationBarItem(
-                  icon: Icon(Icons.menu_book),
-                  label: 'Lore',
+                  icon: Icon(Icons.construction),
+                  label: 'Build',
                 ),
               ],
             ),

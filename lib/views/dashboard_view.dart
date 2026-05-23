@@ -33,6 +33,8 @@ class DashboardView extends StatelessWidget {
           _buildLocationCard(currentZone),
           const SizedBox(height: 12),
 
+          _buildActiveRecipeCard(engine),
+
           // 3. MAIN SECTION: Split layout (Actions on Left, Stats/Inv on Right)
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -234,8 +236,112 @@ class DashboardView extends StatelessWidget {
     return '🏡';
   }
 
+  Widget _buildActiveRecipeCard(GameEngine engine) {
+    final activeState = engine.activeAction;
+    if (activeState == null) {
+      return const SizedBox.shrink();
+    }
+
+    if (activeState.recipe == null && activeState.structure == null) {
+      return const SizedBox.shrink();
+    }
+
+    final String name;
+    final String icon;
+    final String subtitle;
+    final Color progressColor;
+    final Color cardBg;
+
+    if (activeState.recipe != null) {
+      final recipe = activeState.recipe!;
+      name = 'Currently Crafting: ${recipe.name}';
+      icon = recipe.icon;
+      subtitle = 'Restores or creates valuable items';
+      progressColor = GameTheme.accentGold;
+      cardBg = GameTheme.accentGold.withOpacity(0.05);
+    } else {
+      final structure = activeState.structure!;
+      name = 'Building: ${structure.name}';
+      icon = structure.icon;
+      subtitle = 'Constructing permanent structure';
+      progressColor = GameTheme.craftingCyan;
+      cardBg = GameTheme.craftingCyan.withOpacity(0.05);
+    }
+
+    final progress = activeState.progress;
+    final percent = (progress * 100).toInt();
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: GameTheme.glassCardDecoration(
+        customBg: cardBg,
+      ),
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Text(
+                icon,
+                style: const TextStyle(fontSize: 28),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      name,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '$subtitle | $percent%',
+                      style: const TextStyle(color: GameTheme.textMuted, fontSize: 11),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.cancel, color: GameTheme.healthRed),
+                onPressed: () => engine.cancelAction(),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          CustomProgressBar(
+            progress: progress,
+            color: progressColor,
+            height: 10,
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildZoneActions(GameEngine engine, Zone zone) {
     final activeActionState = engine.activeAction;
+
+    final actionsList = List<ZoneAction>.from(zone.actions);
+    if (engine.hasStructureInZone(zone.id, 'outpost_shelter')) {
+      actionsList.add(const ZoneAction(
+        id: 'shelter_rest',
+        name: 'Rest in Shelter',
+        description: 'Rest inside the outpost shelter to recover health and energy for free.',
+        durationSeconds: 4,
+        energyCost: -30,
+        healthCost: -20,
+        xpReward: 5,
+        requiredSkill: SkillType.wayfinding,
+        requiredLevel: 1,
+        lootTable: [],
+      ));
+    }
 
     return Container(
       decoration: GameTheme.glassCardDecoration(),
@@ -253,8 +359,8 @@ class DashboardView extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 8),
-          ...zone.actions.map((action) {
-            final isRunningThis = activeActionState?.action.id == action.id;
+          ...actionsList.map((action) {
+            final isRunningThis = activeActionState?.action?.id == action.id;
             final runningState = isRunningThis ? activeActionState : null;
             final isRunningAny = activeActionState != null;
             final hasLevelReq = action.requiredSkill == null ||
@@ -315,6 +421,17 @@ class DashboardView extends StatelessWidget {
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
+                              if (engine.explorationProgress.containsKey(action.id)) ...[
+                                const SizedBox(height: 2),
+                                Text(
+                                  'Discovery Progress: ${(engine.explorationProgress[action.id]! * 100).toInt()}%',
+                                  style: const TextStyle(
+                                    color: GameTheme.accentGold,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
                               const SizedBox(height: 2),
                               if (action.requiredSkill != null)
                                 Text(
@@ -483,8 +600,8 @@ class DashboardView extends StatelessWidget {
   Widget _buildInventoryPanel(GameEngine engine) {
     final inventory = engine.inventory;
 
-    // Show 8 quick slots (2 rows of 4)
-    const displayCount = 8;
+    // Show dynamic capacity of slots
+    final displayCount = inventory.capacity;
 
     return Container(
       decoration: GameTheme.glassCardDecoration(),

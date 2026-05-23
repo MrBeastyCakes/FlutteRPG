@@ -48,7 +48,7 @@ class PlayerStats {
       maxHealth: 100,
       currentEnergy: 100,
       maxEnergy: 100,
-      gold: 500, // starting gold
+      gold: 10, // starting gold
     );
   }
 }

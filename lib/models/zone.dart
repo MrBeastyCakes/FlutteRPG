@@ -53,6 +53,7 @@ class Zone {
   final double speedModifier; // e.g. 1.1 = 10% faster actions
   final double successModifier; // e.g. 0.05 = +5% success rates
   final List<ZoneAction> actions;
+  final String unlockHint;
 
   const Zone({
     required this.id,
@@ -64,6 +65,7 @@ class Zone {
     this.speedModifier = 1.0,
     this.successModifier = 0.0,
     required this.actions,
+    this.unlockHint = '',
   });
 }
 
@@ -100,6 +102,28 @@ class Zones {
         requiredLevel: 1,
         lootTable: [],
       ),
+      ZoneAction(
+        id: 'explore_forest_paths',
+        name: 'Scout Forest Paths',
+        description: 'Venture into the treeline to search for good woodcutting grounds.',
+        durationSeconds: 5,
+        energyCost: 10,
+        requiredSkill: SkillType.wayfinding,
+        requiredLevel: 1,
+        xpReward: 20,
+        lootTable: [],
+      ),
+      ZoneAction(
+        id: 'explore_rocky_trails',
+        name: 'Scout Rocky Trails',
+        description: 'Follow the rocky outcrops to search for ore-rich mining deposits.',
+        durationSeconds: 5,
+        energyCost: 10,
+        requiredSkill: SkillType.wayfinding,
+        requiredLevel: 1,
+        xpReward: 20,
+        lootTable: [],
+      ),
     ],
   );
 
@@ -111,6 +135,7 @@ class Zones {
     weather: 'Sunny',
     weatherBonusDescription: 'Sunny (+5% Foraging speed)',
     speedModifier: 1.05,
+    unlockHint: 'Explore the Wilderness from the Town Square to discover.',
     actions: [
       ZoneAction(
         id: 'chop_oak',
@@ -123,6 +148,19 @@ class Zones {
         xpReward: 25,
         lootTable: [
           LootDrop(item: Items.oakLog, chance: 0.90),
+        ],
+      ),
+      ZoneAction(
+        id: 'catch_trout',
+        name: 'Catch Fresh Trout',
+        description: 'Fish in the rushing stream for fresh river trout.',
+        durationSeconds: 4,
+        energyCost: 3,
+        requiredSkill: SkillType.wayfinding,
+        requiredLevel: 3,
+        xpReward: 20,
+        lootTable: [
+          LootDrop(item: Items.rawTrout, chance: 0.85),
         ],
       ),
       ZoneAction(
@@ -151,6 +189,17 @@ class Zones {
           LootDrop(item: Items.wildflower, chance: 0.20), // bluebell grows nearby
         ],
       ),
+      ZoneAction(
+        id: 'explore_deep_woods',
+        name: 'Chart Dark Canopy Paths',
+        description: 'Map out the deep, dense undergrowth to find the path to Tier 2 woods.',
+        durationSeconds: 7,
+        energyCost: 15,
+        requiredSkill: SkillType.wayfinding,
+        requiredLevel: 5,
+        xpReward: 35,
+        lootTable: [],
+      ),
     ],
   );
 
@@ -162,6 +211,7 @@ class Zones {
     weather: 'Foggy',
     weatherBonusDescription: 'Foggy (+10% Foraging success)',
     successModifier: 0.10,
+    unlockHint: 'Chart the Dark Canopy Paths from Whispering Woods (Tier 1) to discover.',
     actions: [
       ZoneAction(
         id: 'chop_willow',
@@ -212,6 +262,7 @@ class Zones {
     description: 'A rocky cavern opening containing copper and tin veins.',
     weather: 'Cool Draft',
     weatherBonusDescription: 'Comfortable air (-5% Energy consumption)',
+    unlockHint: 'Explore the Wilderness from the Town Square to discover.',
     actions: [
       ZoneAction(
         id: 'mine_copper',
@@ -239,6 +290,17 @@ class Zones {
           LootDrop(item: Items.tinOre, chance: 0.85),
         ],
       ),
+      ZoneAction(
+        id: 'explore_lower_shafts',
+        name: 'Survey Lower Caverns',
+        description: 'Blaze a safe trail into the deep, unstable lower mining shafts.',
+        durationSeconds: 8,
+        energyCost: 20,
+        requiredSkill: SkillType.wayfinding,
+        requiredLevel: 8,
+        xpReward: 40,
+        lootTable: [],
+      ),
     ],
   );
 
@@ -250,6 +312,7 @@ class Zones {
     weather: 'Dusty',
     weatherBonusDescription: 'Dusty (-5% Action Speed)',
     speedModifier: 0.95,
+    unlockHint: 'Survey the Lower Caverns from Darkstone Mine (Tier 1) to discover.',
     actions: [
       ZoneAction(
         id: 'mine_iron',

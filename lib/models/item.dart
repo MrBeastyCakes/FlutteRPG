@@ -169,6 +169,17 @@ class Items {
     energyAmount: 15,
   );
 
+  static const Item philterOfClarity = Item(
+    id: 'philter_of_clarity',
+    name: 'Philter of Clarity',
+    description: 'A glowing lavender potion that restores substantial energy.',
+    icon: '🧪',
+    type: ItemType.food,
+    value: 50,
+    healAmount: 0,
+    energyAmount: 50,
+  );
+
   // Tools
   static const Item stoneAxe = Item(
     id: 'stone_axe',
@@ -230,6 +241,225 @@ class Items {
     successBonus: 0.10,
   );
 
+  static const Item rawTrout = Item(
+    id: 'raw_trout',
+    name: 'Raw Trout',
+    description: 'A fresh trout caught from the riverbed.',
+    icon: '🐟',
+    type: ItemType.resource,
+    value: 5,
+  );
+
+  static const Item rawPotato = Item(
+    id: 'raw_potato',
+    name: 'Raw Potato',
+    description: 'A freshly dug potato. Needs to be cooked to eat safely.',
+    icon: '🥔',
+    type: ItemType.resource,
+    value: 3,
+  );
+
+  static const Item hotWater = Item(
+    id: 'hot_water',
+    name: 'Hot Water',
+    description: 'A pot of boiling water for brewing teas.',
+    icon: '🍵',
+    type: ItemType.resource,
+    value: 2,
+  );
+
+  static const Item leatherBackpack = Item(
+    id: 'leather_backpack',
+    name: 'Leather Backpack',
+    description: 'A spacious backpack. Use it to permanently increase inventory capacity by 4 slots.',
+    icon: '🎒',
+    type: ItemType.tool,
+    value: 300,
+  );
+
+  static const Item backpackUpgrade = Item(
+    id: 'backpack_upgrade',
+    name: 'Backpack Upgrade',
+    description: 'A modular upgrade for your backpack. Use it to permanently increase inventory capacity by 1 slot.',
+    icon: '🎒',
+    type: ItemType.tool,
+    value: 400,
+  );
+
+  // Upgraded Tools
+  static const Item copperAxe = Item(
+    id: 'copper_axe',
+    name: 'Copper Axe',
+    description: 'A refined copper axe. Better than stone.',
+    icon: '🪓',
+    type: ItemType.tool,
+    value: 100,
+    toolSkill: SkillType.woodcutting,
+    speedBonus: 0.10,
+    successBonus: 0.08,
+  );
+
+  static const Item copperPickaxe = Item(
+    id: 'copper_pickaxe',
+    name: 'Copper Pickaxe',
+    description: 'A refined copper pickaxe. Better than stone.',
+    icon: '⛏️',
+    type: ItemType.tool,
+    value: 100,
+    toolSkill: SkillType.mining,
+    speedBonus: 0.10,
+    successBonus: 0.08,
+  );
+
+  static const Item bronzeAxe = Item(
+    id: 'bronze_axe',
+    name: 'Bronze Axe',
+    description: 'A sharp bronze axe forged from copper and tin.',
+    icon: '🪓',
+    type: ItemType.tool,
+    value: 150,
+    toolSkill: SkillType.woodcutting,
+    speedBonus: 0.14,
+    successBonus: 0.10,
+  );
+
+  static const Item bronzePickaxe = Item(
+    id: 'bronze_pickaxe',
+    name: 'Bronze Pickaxe',
+    description: 'A sturdy bronze pickaxe forged from copper and tin.',
+    icon: '⛏️',
+    type: ItemType.tool,
+    value: 150,
+    toolSkill: SkillType.mining,
+    speedBonus: 0.14,
+    successBonus: 0.10,
+  );
+
+  static const Item reinforcedGloves = Item(
+    id: 'reinforced_gloves',
+    name: 'Reinforced Gloves',
+    description: 'Sturdier gloves with reinforced leather.',
+    icon: '🧤',
+    type: ItemType.tool,
+    value: 200,
+    toolSkill: SkillType.herbalism,
+    speedBonus: 0.18,
+    successBonus: 0.15,
+  );
+
+  static const Item masterworkGloves = Item(
+    id: 'masterwork_gloves',
+    name: 'Masterwork Gloves',
+    description: 'The ultimate foraging gloves woven with nightshade fibers.',
+    icon: '🧤',
+    type: ItemType.tool,
+    value: 350,
+    toolSkill: SkillType.herbalism,
+    speedBonus: 0.28,
+    successBonus: 0.22,
+  );
+
+  // Upgraded Foods & Potions
+  static const Item butteredPotato = Item(
+    id: 'buttered_potato',
+    name: 'Buttered Potato',
+    description: 'A warm potato glazed with wildflower seasoning.',
+    icon: '🥔',
+    type: ItemType.food,
+    value: 15,
+    healAmount: 25,
+    energyAmount: 10,
+  );
+
+  static const Item loadedPotato = Item(
+    id: 'loaded_potato',
+    name: 'Loaded Potato',
+    description: 'Baked potato topped with wild trout bacon.',
+    icon: '🥔',
+    type: ItemType.food,
+    value: 35,
+    healAmount: 45,
+    energyAmount: 15,
+  );
+
+  static const Item smokedTrout = Item(
+    id: 'smoked_trout',
+    name: 'Smoked Trout',
+    description: 'Fresh trout smoked over willow wood.',
+    icon: '🐟',
+    type: ItemType.food,
+    value: 30,
+    healAmount: 50,
+    energyAmount: 25,
+  );
+
+  static const Item spicedTea = Item(
+    id: 'spiced_tea',
+    name: 'Spiced Tea',
+    description: 'Alertness-boosting tea infused with a drop of nightshade essence.',
+    icon: '🍵',
+    type: ItemType.food,
+    value: 25,
+    healAmount: 10,
+    energyAmount: 50,
+  );
+
+  static const Item elixirOfLife1 = Item(
+    id: 'elixir_1',
+    name: 'Elixir of Life I',
+    description: 'A basic healing potion brewed with forest wildflowers.',
+    icon: '🧪',
+    type: ItemType.food,
+    value: 15,
+    healAmount: 25,
+    energyAmount: 0,
+  );
+
+  static const Item elixirOfLife2 = Item(
+    id: 'elixir_2',
+    name: 'Elixir of Life II',
+    description: 'An advanced healing potion stabilized with river clay.',
+    icon: '🧪',
+    type: ItemType.food,
+    value: 30,
+    healAmount: 50,
+    energyAmount: 0,
+  );
+
+  static const Item elixirOfLife3 = Item(
+    id: 'elixir_3',
+    name: 'Elixir of Life III',
+    description: 'A powerful healing potion infused with nightshade extract.',
+    icon: '🧪',
+    type: ItemType.food,
+    value: 60,
+    healAmount: 80,
+    energyAmount: 0,
+  );
+
+  // Lore Glyphs
+  static const Item glyphSwiftness = Item(
+    id: 'glyph_swiftness',
+    name: 'Glyph of Swiftness',
+    description: 'A clay tablet carved with runes of speed.',
+    icon: '🪨',
+    type: ItemType.food,
+    value: 25,
+    healAmount: 0,
+    energyAmount: 30,
+  );
+
+  static const Item glyphFortitude = Item(
+    id: 'glyph_fortitude',
+    name: 'Glyph of Fortitude',
+    description: 'A clay tablet carved with runes of protection.',
+    icon: '🪨',
+    type: ItemType.food,
+    value: 40,
+    healAmount: 40,
+    energyAmount: 0,
+  );
+
   static const List<Item> all = [
     oakLog,
     willowLog,
@@ -248,6 +478,27 @@ class Items {
     stonePickaxe,
     ironPickaxe,
     foragingGloves,
+    rawTrout,
+    rawPotato,
+    hotWater,
+    leatherBackpack,
+    backpackUpgrade,
+    philterOfClarity,
+    copperAxe,
+    copperPickaxe,
+    bronzeAxe,
+    bronzePickaxe,
+    reinforcedGloves,
+    masterworkGloves,
+    butteredPotato,
+    loadedPotato,
+    smokedTrout,
+    spicedTea,
+    elixirOfLife1,
+    elixirOfLife2,
+    elixirOfLife3,
+    glyphSwiftness,
+    glyphFortitude,
   ];
 
   static Item? findById(String id) {

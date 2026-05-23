@@ -3,6 +3,7 @@ import 'package:flutter_text_based_rpg/engine/game_engine.dart';
 import 'package:flutter_text_based_rpg/models/item.dart';
 import 'package:flutter_text_based_rpg/models/skill.dart';
 import 'package:flutter_text_based_rpg/models/masterwork.dart';
+import 'package:flutter_text_based_rpg/models/zone.dart';
 
 void main() {
   group('GameEngine Stats & Actions Tests', () {
@@ -16,7 +17,8 @@ void main() {
       expect(engine.playerStats.name, 'Elara');
       expect(engine.playerStats.currentHealth, 100);
       expect(engine.playerStats.currentEnergy, 100);
-      expect(engine.playerStats.gold, 500);
+      expect(engine.playerStats.gold, 10);
+      expect(engine.inventory.slots.isEmpty, true);
       expect(engine.currentZone.id, 'town_square');
       expect(engine.skills[SkillType.woodcutting]?.level, 1);
     });
@@ -49,7 +51,8 @@ void main() {
     });
 
     test('Fainting mechanics on 0 Health', () {
-      // Set gold to 100 to check penalty
+      // Set gold to 500 to check penalty
+      engine.playerStats = engine.playerStats.copyWith(gold: 500);
       // Directly check fainting by running engine.faint()
       engine.faint();
 
@@ -61,7 +64,17 @@ void main() {
     });
 
     test('Inventory and Item handling', () {
-      // Check initial inventory (has stone axe, stone pickaxe, 5 berries)
+      // Check initial inventory is empty
+      expect(engine.inventory.slots.isEmpty, true);
+
+      // Seed items and gold manually
+      engine.inventory = engine.inventory
+          .addItem(Items.stoneAxe, 1)
+          .addItem(Items.stonePickaxe, 1)
+          .addItem(Items.wildBerries, 5);
+      engine.playerStats = engine.playerStats.copyWith(gold: 500);
+
+      // Check inventory has the items we added
       expect(engine.inventory.hasItem('stone_axe'), true);
       expect(engine.inventory.hasItem('wild_berries', 5), true);
 
@@ -69,7 +82,6 @@ void main() {
       engine.buyItem(Items.wildBerries); // Costs 2 gold, adds 1 berry
       expect(engine.inventory.hasItem('wild_berries', 6), true);
       expect(engine.playerStats.gold, 498);
-
       // Consuming food
       engine.eatFood(Items.wildBerries);
       expect(engine.inventory.hasItem('wild_berries', 5), true);
@@ -106,6 +118,8 @@ void main() {
       expect(engine.activeMasterwork?.currentStepId, 'force_strike');
 
       // Add 5 Iron Ores to inventory to make choice 2
+      engine.inventory = engine.inventory.copyWith(capacity: 10);
+      engine.playerStats = engine.playerStats.copyWith(gold: 1000);
       for (int i = 0; i < 5; i++) {
         engine.buyItem(Items.ironOre); // bypass normal check to get items
       }
@@ -122,6 +136,46 @@ void main() {
       final newWCSkill = engine.skills[SkillType.woodcutting]!;
       expect(newWCSkill.levelCap, 20);
       expect(newWCSkill.isGated, false);
+    });
+
+    test('Zone unlocking and travel guards', () {
+      // 1. Initial zones unlocked: only town_square
+      expect(engine.unlockedZoneIds.contains('town_square'), true);
+      expect(engine.unlockedZoneIds.contains('whispering_woods_1'), false);
+      expect(engine.unlockedZoneIds.contains('darkstone_mine_1'), false);
+
+      // 2. Travel to a locked zone should fail (remain in town_square)
+      engine.travelTo(Zones.whisperingWoodsTier1);
+      expect(engine.currentZone.id, 'town_square');
+      expect(engine.logs.first.message.contains('locked'), true);
+
+      // 3. Unlock zones manually (simulating explore completion)
+      engine.unlockZone('whispering_woods_1');
+      expect(engine.unlockedZoneIds.contains('whispering_woods_1'), true);
+      expect(engine.logs.first.message.contains('New Zone Discovered'), true);
+
+      // 4. Travel to whispering_woods_1 should now succeed
+      engine.travelTo(Zones.whisperingWoodsTier1);
+      expect(engine.currentZone.id, 'whispering_woods_1');
+    });
+
+    test('Reset game engine state', () {
+      // Modify state first
+      engine.playerStats = engine.playerStats.copyWith(gold: 9999, currentHealth: 45);
+      engine.unlockZone('whispering_woods_1');
+      engine.travelTo(Zones.whisperingWoodsTier1);
+
+      // Perform reset
+      engine.resetGame();
+
+      // Check that state has been restored to default values
+      expect(engine.playerStats.gold, 10);
+      expect(engine.inventory.slots.isEmpty, true);
+      expect(engine.playerStats.currentHealth, 100);
+      expect(engine.currentZone.id, 'town_square');
+      expect(engine.unlockedZoneIds.length, 1);
+      expect(engine.unlockedZoneIds.contains('town_square'), true);
+      expect(engine.activeAction, null);
     });
   });
 }
