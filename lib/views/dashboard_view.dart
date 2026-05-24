@@ -33,6 +33,11 @@ class DashboardView extends StatelessWidget {
           _buildLocationCard(currentZone),
           const SizedBox(height: 12),
 
+          if (engine.activeCombat != null) ...[
+            _buildCombatDashboardCard(context, engine),
+            const SizedBox(height: 12),
+          ],
+
           _buildActiveRecipeCard(engine),
 
           // 3. MAIN SECTION: Split layout (Actions on Left, Stats/Inv on Right)
@@ -151,6 +156,178 @@ class DashboardView extends StatelessWidget {
                 ],
               ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Color _getCombatLogColor(String line) {
+    if (line.contains(" strike ") || line.contains("You strike")) {
+      return const Color(0xFF81C784); // light green
+    }
+    if (line.contains(" strikes you ")) {
+      return const Color(0xFFE57373); // light red
+    }
+    if (line.contains("defeated")) {
+      return GameTheme.accentGold;
+    }
+    if (line.contains("collapsed")) {
+      return Colors.red;
+    }
+    return Colors.white;
+  }
+
+  Widget _buildCombatDashboardCard(BuildContext context, GameEngine engine) {
+    final combatState = engine.activeCombat;
+    if (combatState == null) return const SizedBox.shrink();
+
+    final beast = combatState.beast;
+    final beastHp = combatState.beastCurrentHealth;
+    final beastMaxHp = beast.maxHealth;
+    final beastHpPercent = (beastHp / beastMaxHp).clamp(0.0, 1.0);
+
+    final playerHp = engine.playerStats.currentHealth;
+    final playerMaxHp = engine.playerStats.maxHealth;
+    final playerHpPercent = (playerHp / playerMaxHp).clamp(0.0, 1.0);
+
+    final reversedLogs = combatState.combatLog.reversed.toList();
+
+    return Container(
+      decoration: GameTheme.glassCardDecoration(
+        customBg: const Color(0xFF1E2833).withOpacity(0.8),
+      ),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Header: Battle status
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  const Text('⚔️', style: TextStyle(fontSize: 20)),
+                  const SizedBox(width: 8),
+                  const Text(
+                    'BATTLE IN PROGRESS',
+                    style: TextStyle(
+                      color: GameTheme.accentGold,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1.2,
+                    ),
+                  ),
+                ],
+              ),
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: GameTheme.healthRed,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                ),
+                onPressed: () {
+                  engine.cancelAction();
+                },
+                icon: const Icon(Icons.run_circle_outlined, size: 16),
+                label: const Text(
+                  'Flee Battle',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          // Two columns: Player Health vs Beast Health
+          Row(
+            children: [
+              // Player stats summary
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      '👤 Player Health',
+                      style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 4),
+                    LinearProgressIndicator(
+                      value: playerHpPercent,
+                      backgroundColor: Colors.black.withOpacity(0.5),
+                      valueColor: const AlwaysStoppedAnimation<Color>(GameTheme.healthRed),
+                      minHeight: 8,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '$playerHp / $playerMaxHp HP',
+                      style: const TextStyle(color: GameTheme.textMuted, fontSize: 11),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 24),
+              // Beast stats summary
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${beast.icon} ${beast.name}',
+                      style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 4),
+                    LinearProgressIndicator(
+                      value: beastHpPercent,
+                      backgroundColor: Colors.black.withOpacity(0.5),
+                      valueColor: const AlwaysStoppedAnimation<Color>(Colors.orangeAccent),
+                      minHeight: 8,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '$beastHp / $beastMaxHp HP',
+                      style: const TextStyle(color: GameTheme.textMuted, fontSize: 11),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          // Scrolling Log Console
+          Container(
+            height: 150,
+            decoration: BoxDecoration(
+              color: const Color(0xFF0C1014).withOpacity(0.9),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: GameTheme.border.withOpacity(0.5)),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            child: ListView.builder(
+              reverse: true,
+              itemCount: reversedLogs.length,
+              itemBuilder: (context, index) {
+                final line = reversedLogs[index];
+                final color = _getCombatLogColor(line);
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 2.0),
+                  child: Text(
+                    line,
+                    style: TextStyle(
+                      fontFamily: 'monospace',
+                      fontSize: 12,
+                      color: color,
+                    ),
+                  ),
+                );
+              },
+            ),
           ),
         ],
       ),

@@ -787,6 +787,160 @@ class MasterworkTasks {
     },
   );
 
+  static final MasterworkTask combatLvl10 = MasterworkTask(
+    id: 'combat_lvl_10',
+    skillType: SkillType.combat,
+    levelGate: 10,
+    title: "The Gladiator's Arena",
+    description: 'Enter the Town Arena to face the champion Gladiator in a test of pure combat skill and endurance.',
+    startStepId: 'start',
+    steps: {
+      'start': const MasterworkStep(
+        id: 'start',
+        prompt: 'You enter the sandy arena ring. The Gladiator champion draws his wooden training sword. How do you open the duel?',
+        options: [
+          MasterworkOption(
+            text: 'Analyze his stance for an opening.',
+            nextStepId: 'stance_analysed',
+            requiredSkill: SkillType.lore,
+            requiredLevel: 3,
+            feedback: 'Your understanding of ancient dueling stances reveals a spiral stress line in his footing.',
+          ),
+          MasterworkOption(
+            text: 'Charge in with a heavy offensive strike.',
+            nextStepId: 'charge_strike',
+            energyCost: 20,
+            feedback: 'You swing with all your power. The impact vibrates through your bones!',
+          ),
+          MasterworkOption(
+            text: 'Yield and retreat.',
+            nextStepId: null,
+            isSuccess: false,
+            feedback: 'You decide you are not ready and step away.',
+          ),
+        ],
+      ),
+      'stance_analysed': const MasterworkStep(
+        id: 'stance_analysed',
+        prompt: 'You spotted the weakness in his stance. Aligning your blow is key.',
+        options: [
+          MasterworkOption(
+            text: 'Deliver a swift feint and strike his leg.',
+            nextStepId: null,
+            isSuccess: true,
+            energyCost: 15,
+            feedback: 'You feint right and strike his left ankle! The Gladiator nods in respect and yields. Combat Lvl 10 cap unlocked!',
+          ),
+          MasterworkOption(
+            text: 'Try to disarm him with brute force.',
+            nextStepId: null,
+            isSuccess: false,
+            energyCost: 25,
+            feedback: 'You try to grab his sword, but he counters and sweeps your legs, forcing you to yield.',
+          ),
+        ],
+      ),
+      'charge_strike': const MasterworkStep(
+        id: 'charge_strike',
+        prompt: 'Your aggressive charge catches him off guard, but he blocks with his shield and prepares a heavy counter.',
+        options: [
+          MasterworkOption(
+            text: 'Roll under his shield and strike from behind.',
+            nextStepId: null,
+            isSuccess: true,
+            energyCost: 15,
+            feedback: 'You roll under the shield and hit his back. He laughs and concedes the duel! Combat Lvl 10 cap unlocked!',
+          ),
+          MasterworkOption(
+            text: 'Brace for impact and block his swing.',
+            nextStepId: null,
+            isSuccess: false,
+            energyCost: 15,
+            healthCost: 15,
+            feedback: 'You brace yourself, but the blow is too heavy. You are knocked down and yield.',
+          ),
+        ],
+      ),
+    },
+  );
+
+  static final MasterworkTask combatLvl20 = MasterworkTask(
+    id: 'combat_lvl_20',
+    skillType: SkillType.combat,
+    levelGate: 20,
+    title: 'The Legendary Wyrm Hunt',
+    description: 'Track and defeat the legendary Stone Wyrm nesting deep in the mountain caverns.',
+    startStepId: 'start',
+    steps: {
+      'start': const MasterworkStep(
+        id: 'start',
+        prompt: 'You enter the dark, sulfurous Wyrm Cave. The giant Stone Wyrm rumbles and raises its armored tail. How do you engage?',
+        options: [
+          MasterworkOption(
+            text: 'Identify the weak spot on its underbelly.',
+            nextStepId: 'wyrm_spot',
+            requiredSkill: SkillType.lore,
+            requiredLevel: 6,
+            feedback: 'You see a missing scale on its throat!',
+          ),
+          MasterworkOption(
+            text: 'Wait for the Wyrm to strike and counter-attack.',
+            nextStepId: 'wyrm_counter',
+            energyCost: 25,
+            feedback: 'The Wyrm lunges! You dodge the bite, but its giant heavy tail is sweeping towards you!',
+          ),
+          MasterworkOption(
+            text: 'Flee back to safety.',
+            nextStepId: null,
+            isSuccess: false,
+            feedback: 'You flee the cavern in terror.',
+          ),
+        ],
+      ),
+      'wyrm_spot': const MasterworkStep(
+        id: 'wyrm_spot',
+        prompt: 'The missing scale on the throat is exposed. How do you target it?',
+        options: [
+          MasterworkOption(
+            text: 'Lunge forward with a precise thrust.',
+            nextStepId: null,
+            isSuccess: true,
+            energyCost: 20,
+            feedback: 'Your blade strikes the missing scale perfectly! The Wyrm bellows in pain and retreats. Combat Lvl 20 cap unlocked!',
+          ),
+          MasterworkOption(
+            text: 'Throw a rock to distract it.',
+            nextStepId: null,
+            isSuccess: false,
+            energyCost: 10,
+            feedback: 'The rock bounces off harmlessly. The Wyrm sweeps you away with its tail.',
+          ),
+        ],
+      ),
+      'wyrm_counter': const MasterworkStep(
+        id: 'wyrm_counter',
+        prompt: 'The heavy tail is sweeping towards you with bone-crushing speed.',
+        options: [
+          MasterworkOption(
+            text: 'Leap over the sweeping tail and execute an overhead slash.',
+            nextStepId: null,
+            isSuccess: true,
+            energyCost: 20,
+            feedback: 'You leap high over the tail and strike the beast\'s head! It concedes and slithers away. Combat Lvl 20 cap unlocked!',
+          ),
+          MasterworkOption(
+            text: 'Try to block the giant tail with your armor.',
+            nextStepId: null,
+            isSuccess: false,
+            energyCost: 20,
+            healthCost: 25,
+            feedback: 'The force of the tail strike crushes your defense, throwing you against the walls. You are too hurt to continue.',
+          ),
+        ],
+      ),
+    },
+  );
+
   static final List<MasterworkTask> all = [
     woodcuttingLvl10,
     miningLvl10,
@@ -795,6 +949,7 @@ class MasterworkTasks {
     loreLvl10,
     cookingLvl10,
     craftingLvl10,
+    combatLvl10,
     woodcuttingLvl20,
     miningLvl20,
     herbalismLvl20,
@@ -802,6 +957,7 @@ class MasterworkTasks {
     loreLvl20,
     cookingLvl20,
     craftingLvl20,
+    combatLvl20,
   ];
 
   static MasterworkTask? findForSkill(SkillType skill, int level) {

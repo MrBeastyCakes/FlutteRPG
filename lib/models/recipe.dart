@@ -403,6 +403,98 @@ class Recipes {
     durationSeconds: 5,
   );
 
+  // Weapons
+  static const Recipe bronzeSword = Recipe(
+    id: 'bronze_sword',
+    name: 'Bronze Sword',
+    icon: '⚔️',
+    description: 'Forge a sharp bronze sword from copper and tin.',
+    resultItemId: 'bronze_sword',
+    resultQuantity: 1,
+    requiredSkill: SkillType.crafting,
+    requiredLevel: 3,
+    xpReward: 35.0,
+    inputs: {'copper_ore': 5, 'tin_ore': 3, 'oak_log': 2},
+    energyCost: 6,
+    durationSeconds: 4,
+  );
+
+  static const Recipe ironSword = Recipe(
+    id: 'iron_sword',
+    name: 'Iron Sword',
+    icon: '⚔️',
+    description: 'Forge a heavy iron sword.',
+    resultItemId: 'iron_sword',
+    resultQuantity: 1,
+    requiredSkill: SkillType.crafting,
+    requiredLevel: 7,
+    xpReward: 60.0,
+    inputs: {'iron_ore': 6, 'willow_log': 3, 'river_clay': 1},
+    energyCost: 8,
+    durationSeconds: 5,
+  );
+
+  static const Recipe steelGreatsword = Recipe(
+    id: 'steel_greatsword',
+    name: 'Steel Greatsword',
+    icon: '⚔️',
+    description: 'Forge a legendary greatsword.',
+    resultItemId: 'steel_greatsword',
+    resultQuantity: 1,
+    requiredSkill: SkillType.crafting,
+    requiredLevel: 15,
+    xpReward: 120.0,
+    inputs: {'iron_ore': 12, 'willow_log': 4, 'river_clay': 3, 'troll_claw': 1},
+    energyCost: 12,
+    durationSeconds: 7,
+  );
+
+  // Armor
+  static const Recipe leatherChest = Recipe(
+    id: 'leather_chest',
+    name: 'Leather Jerkin',
+    icon: '🛡️',
+    description: 'Sew a light leather vest.',
+    resultItemId: 'leather_chest',
+    resultQuantity: 1,
+    requiredSkill: SkillType.crafting,
+    requiredLevel: 2,
+    xpReward: 25.0,
+    inputs: {'wild_berries': 4, 'wolf_pelt': 2},
+    energyCost: 5,
+    durationSeconds: 4,
+  );
+
+  static const Recipe bronzeChest = Recipe(
+    id: 'bronze_chest',
+    name: 'Bronze Scale',
+    icon: '🛡️',
+    description: 'Forge bronze plate mail.',
+    resultItemId: 'bronze_chest',
+    resultQuantity: 1,
+    requiredSkill: SkillType.crafting,
+    requiredLevel: 5,
+    xpReward: 45.0,
+    inputs: {'copper_ore': 8, 'tin_ore': 4, 'river_clay': 2},
+    energyCost: 7,
+    durationSeconds: 5,
+  );
+
+  static const Recipe steelPlate = Recipe(
+    id: 'steel_plate',
+    name: 'Steel Cuirass',
+    icon: '🛡️',
+    description: 'Forge heavy steel plate armor.',
+    resultItemId: 'steel_plate',
+    resultQuantity: 1,
+    requiredSkill: SkillType.crafting,
+    requiredLevel: 12,
+    xpReward: 100.0,
+    inputs: {'iron_ore': 12, 'river_clay': 4, 'spider_silk': 2},
+    energyCost: 10,
+    durationSeconds: 6,
+  );
+
   static Recipe getBackpackRecipe(int capacity) {
     if (capacity < 8) {
       return const Recipe(
@@ -482,6 +574,12 @@ class Recipes {
     philterOfClarity,
     glyphSwiftness,
     glyphFortitude,
+    bronzeSword,
+    ironSword,
+    steelGreatsword,
+    leatherChest,
+    bronzeChest,
+    steelPlate,
   ];
 
   static Recipe? findById(String id) {

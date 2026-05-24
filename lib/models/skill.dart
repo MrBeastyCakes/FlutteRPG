@@ -8,6 +8,7 @@ enum SkillType {
   lore,
   cooking,
   crafting,
+  combat,
 }
 
 extension SkillTypeExtension on SkillType {
@@ -27,6 +28,8 @@ extension SkillTypeExtension on SkillType {
         return 'Cooking';
       case SkillType.crafting:
         return 'Crafting';
+      case SkillType.combat:
+        return 'Combat';
     }
   }
 
@@ -46,6 +49,8 @@ extension SkillTypeExtension on SkillType {
         return '🍳';
       case SkillType.crafting:
         return '🛠️';
+      case SkillType.combat:
+        return '⚔️';
     }
   }
 }
@@ -137,6 +142,7 @@ class SkillState {
       case SkillType.lore: return 'Obelisk Interpreter';
       case SkillType.cooking: return 'Inn Sous-Chef';
       case SkillType.crafting: return 'Journeyman Smith';
+      case SkillType.combat: return 'Slayer\'s Might';
     }
   }
 
@@ -149,6 +155,7 @@ class SkillState {
       case SkillType.lore: return 'Lore actions speed +20% and +15% XP bonus to ALL skills.';
       case SkillType.cooking: return 'Cooking speed +20% and all consumed food restores +15% health & energy.';
       case SkillType.crafting: return 'Crafting speed +20% and crafting energy cost -1.';
+      case SkillType.combat: return 'Base Attack power +3 and base Defense +1.';
     }
   }
 
@@ -161,6 +168,7 @@ class SkillState {
       case SkillType.lore: return 'Sage of Ages';
       case SkillType.cooking: return 'Master Culinarian';
       case SkillType.crafting: return 'Star Forge Artisan';
+      case SkillType.combat: return 'Gladiator\'s Grace';
     }
   }
 
@@ -173,6 +181,7 @@ class SkillState {
       case SkillType.lore: return 'Lore actions speed +30% and +25% XP bonus to ALL skills.';
       case SkillType.cooking: return 'Cooking speed +30%, food eaten restores +30% health & energy, and +20% chance to double cooking output.';
       case SkillType.crafting: return 'Crafting speed +30% and a 15% chance to save all inputs when crafting.';
+      case SkillType.combat: return 'Combat round timer speed +15% and +15% chance for double monster loot drops.';
     }
   }
 

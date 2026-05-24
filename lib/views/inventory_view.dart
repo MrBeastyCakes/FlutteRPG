@@ -7,6 +7,7 @@ import '../models/zone.dart';
 import '../models/recipe.dart';
 import '../models/skill.dart';
 import '../theme/game_theme.dart';
+import '../widgets/custom_progress_bar.dart';
 
 class InventoryView extends StatefulWidget {
   const InventoryView({super.key});
@@ -36,6 +37,8 @@ class _InventoryViewState extends State<InventoryView> with SingleTickerProvider
     final inventory = engine.inventory;
     final gold = engine.playerStats.gold;
 
+    final activeAction = engine.activeAction;
+
     return Column(
       children: [
         // Tab Bar
@@ -50,6 +53,9 @@ class _InventoryViewState extends State<InventoryView> with SingleTickerProvider
             Tab(text: 'Merchant Shop', icon: Icon(Icons.store)),
           ],
         ),
+        if (activeAction != null) ...[
+          _buildActiveActionHeader(context, engine, activeAction),
+        ],
         // Tab contents
         Expanded(
           child: TabBarView(
@@ -204,7 +210,14 @@ class _InventoryViewState extends State<InventoryView> with SingleTickerProvider
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (context) {
-        return SafeArea(
+        return AnimatedBuilder(
+          animation: engine,
+          builder: (context, _) {
+            final liveQty = engine.inventory.slots
+                .where((slot) => slot.item.id == item.id)
+                .fold<int>(0, (sum, slot) => sum + slot.quantity);
+
+            return SafeArea(
           child: AnimatedPadding(
             padding: MediaQuery.of(context).viewInsets,
             duration: const Duration(milliseconds: 100),
@@ -242,7 +255,11 @@ class _InventoryViewState extends State<InventoryView> with SingleTickerProvider
                               Text(
                                 item.isFood
                                     ? 'Consumable Food'
-                                    : (item.isTool ? 'Gathering Tool' : 'Raw Resource'),
+                                    : (item.isTool
+                                        ? 'Gathering Tool'
+                                        : (item.isWeapon
+                                            ? 'Combat Weapon'
+                                            : (item.isArmor ? 'Combat Armor' : 'Raw Resource'))),
                                 style: const TextStyle(color: GameTheme.accentGold, fontSize: 12),
                               ),
                             ],
@@ -315,79 +332,248 @@ class _InventoryViewState extends State<InventoryView> with SingleTickerProvider
                       ),
                       const SizedBox(height: 16),
                     ],
+                    if (item.isWeapon) ...[
+                      Container(
+                        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF222C37),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: GameTheme.border),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              '⚔️ Combat Weapon',
+                              style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '⚔️ Attack Power: +${item.attackPower}',
+                              style: const TextStyle(color: Colors.redAccent, fontSize: 12),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+                    if (item.isArmor) ...[
+                      Container(
+                        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF222C37),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: GameTheme.border),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              '🛡️ Combat Armor',
+                              style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '🛡️ Defense: +${item.defense}',
+                              style: const TextStyle(color: Colors.blueAccent, fontSize: 12),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
 
                     // Action buttons
-                    Row(
-                      children: [
-                        if (item.isFood || item.id == 'leather_backpack' || item.id == 'backpack_upgrade') ...[
-                          Expanded(
-                            child: ElevatedButton.icon(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.green,
-                                foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(vertical: 14),
-                              ),
-                              onPressed: () {
-                                engine.useItem(item);
-                                Navigator.pop(context);
-                              },
-                              icon: Icon(item.isFood ? Icons.restaurant : Icons.backpack),
-                              label: Text(
-                                item.isFood ? 'Eat Item' : 'Use Backpack',
-                                style: const TextStyle(fontWeight: FontWeight.bold),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                        ],
-                        if (item.isTool && item.toolSkill != null) ...[
-                          Expanded(
-                            child: ElevatedButton.icon(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: GameTheme.accentGold,
-                                foregroundColor: Colors.black,
-                                padding: const EdgeInsets.symmetric(vertical: 14),
-                              ),
-                              onPressed: () {
-                                engine.equipTool(item);
-                                Navigator.pop(context);
-                              },
-                              icon: const Icon(Icons.shield_outlined),
-                              label: const Text(
-                                'Equip Tool',
-                                style: TextStyle(fontWeight: FontWeight.bold),
+                    if (item.isFood ||
+                        item.id == 'leather_backpack' ||
+                        item.id == 'backpack_upgrade' ||
+                        (item.isTool && item.toolSkill != null) ||
+                        item.isWeapon ||
+                        item.isArmor) ...[
+                      Row(
+                        children: [
+                          if (item.isFood || item.id == 'leather_backpack' || item.id == 'backpack_upgrade')
+                            Expanded(
+                              child: ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.green,
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(vertical: 14),
+                                ),
+                                onPressed: liveQty > 0
+                                    ? () {
+                                        engine.useItem(item);
+                                        if (liveQty <= 1) {
+                                          Navigator.pop(context);
+                                        }
+                                      }
+                                    : null,
+                                icon: Icon(item.isFood ? Icons.restaurant : Icons.backpack),
+                                label: Text(
+                                  item.isFood ? 'Eat Item' : 'Use Backpack',
+                                  style: const TextStyle(fontWeight: FontWeight.bold),
+                                ),
                               ),
                             ),
-                          ),
-                          const SizedBox(width: 12),
+                          if (item.isTool && item.toolSkill != null)
+                            Expanded(
+                              child: ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: GameTheme.accentGold,
+                                  foregroundColor: Colors.black,
+                                  padding: const EdgeInsets.symmetric(vertical: 14),
+                                ),
+                                onPressed: liveQty > 0
+                                    ? () {
+                                        engine.equipTool(item);
+                                        Navigator.pop(context);
+                                      }
+                                    : null,
+                                icon: const Icon(Icons.shield_outlined),
+                                label: const Text(
+                                  'Equip Tool',
+                                  style: TextStyle(fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                            ),
+                          if (item.isWeapon)
+                            Expanded(
+                              child: ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: GameTheme.accentGold,
+                                  foregroundColor: Colors.black,
+                                  padding: const EdgeInsets.symmetric(vertical: 14),
+                                ),
+                                onPressed: liveQty > 0
+                                    ? () {
+                                        engine.equipWeapon(item);
+                                        Navigator.pop(context);
+                                      }
+                                    : null,
+                                icon: const Icon(Icons.gavel_rounded),
+                                label: const Text(
+                                  'Equip Weapon',
+                                  style: TextStyle(fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                            ),
+                          if (item.isArmor)
+                            Expanded(
+                              child: ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: GameTheme.accentGold,
+                                  foregroundColor: Colors.black,
+                                  padding: const EdgeInsets.symmetric(vertical: 14),
+                                ),
+                                onPressed: liveQty > 0
+                                    ? () {
+                                        engine.equipArmor(item);
+                                        Navigator.pop(context);
+                                      }
+                                    : null,
+                                icon: const Icon(Icons.shield_outlined),
+                                label: const Text(
+                                  'Equip Armor',
+                                  style: TextStyle(fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                            ),
                         ],
+                      ),
+                      const SizedBox(height: 12),
+                    ],
 
-                        // Sell Actions (Depends on Town location)
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: inTown ? GameTheme.accentGold : GameTheme.textMuted,
-                              side: BorderSide(
-                                color: inTown ? GameTheme.accentGold : GameTheme.border,
-                                width: 1.5,
+                    // Sell Actions (Depends on Town location)
+                    if (item.value > 0) ...[
+                      const Text(
+                        'SELL OPTIONS',
+                        style: TextStyle(
+                          color: GameTheme.accentGold,
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1.0,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton(
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: inTown ? GameTheme.accentGold : GameTheme.textMuted,
+                                side: BorderSide(
+                                  color: inTown ? GameTheme.accentGold : GameTheme.border,
+                                  width: 1.2,
+                                ),
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                               ),
-                              padding: const EdgeInsets.symmetric(vertical: 14),
-                            ),
-                            onPressed: inTown
-                                ? () {
-                                    engine.sellItem(item, 1);
-                                    Navigator.pop(context);
-                                  }
-                                : null, // Disabled if not in Town
-                            icon: const Icon(Icons.sell),
-                            label: Text(
-                              inTown ? 'Sell 1 (${item.value}g)' : 'Sell (Town Only)',
-                              style: const TextStyle(fontWeight: FontWeight.bold),
+                              onPressed: inTown && liveQty > 0
+                                  ? () {
+                                      engine.sellItem(item, 1);
+                                      if (liveQty <= 1) {
+                                        Navigator.pop(context);
+                                      }
+                                    }
+                                  : null,
+                              child: Text(
+                                inTown ? 'Sell 1 (${item.value}g)' : 'Sell (Town Only)',
+                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                              ),
                             ),
                           ),
-                        ),
-                      ],
-                    ),
+                          if (inTown && liveQty >= 10) ...[
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: OutlinedButton(
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: GameTheme.accentGold,
+                                  side: const BorderSide(color: GameTheme.accentGold, width: 1.2),
+                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                ),
+                                onPressed: liveQty >= 10
+                                    ? () {
+                                        engine.sellItem(item, 10);
+                                        if (liveQty <= 10) {
+                                          Navigator.pop(context);
+                                        }
+                                      }
+                                    : null,
+                                child: Text(
+                                  'Sell 10 (${item.value * 10}g)',
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                                ),
+                              ),
+                            ),
+                          ],
+                          if (inTown) ...[
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: ElevatedButton(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: GameTheme.healthRed.withOpacity(0.2),
+                                  foregroundColor: Colors.white,
+                                  side: const BorderSide(color: GameTheme.healthRed, width: 1.2),
+                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                ),
+                                onPressed: liveQty > 0
+                                    ? () {
+                                        engine.sellItem(item, liveQty);
+                                        Navigator.pop(context);
+                                      }
+                                    : null,
+                                child: Text(
+                                  'Sell All (${item.value * liveQty}g)',
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ],
                     const SizedBox(height: 12),
                     ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(
@@ -515,6 +701,7 @@ class _InventoryViewState extends State<InventoryView> with SingleTickerProvider
                         final canCraftHere = engine.canCraftRecipe(recipe);
                         final isCraftable = canCraftHere && hasLevel && !isGated && hasIngredients && hasEnergy;
                         final buttonLabel = recipe.requiredSkill == SkillType.cooking ? 'Cook' : 'Craft';
+                        final progressColor = recipe.requiredSkill == SkillType.cooking ? GameTheme.accentGold : GameTheme.craftingCyan;
 
                         return Card(
                           color: const Color(0xFF1E2833),
@@ -606,21 +793,33 @@ class _InventoryViewState extends State<InventoryView> with SingleTickerProvider
                                       ],
                                     ),
                                     if (isActive)
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                        decoration: BoxDecoration(
-                                          color: GameTheme.accentGold.withOpacity(0.15),
-                                          borderRadius: BorderRadius.circular(6),
-                                          border: Border.all(color: GameTheme.accentGold.withOpacity(0.5)),
-                                        ),
-                                        child: Text(
-                                          '${buttonLabel}ing...',
-                                          style: const TextStyle(
-                                            color: GameTheme.accentGold,
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.bold,
+                                      Column(
+                                        crossAxisAlignment: CrossAxisAlignment.end,
+                                        children: [
+                                          SizedBox(
+                                            width: 120,
+                                            child: CustomProgressBar(
+                                              progress: engine.activeAction!.progress,
+                                              color: progressColor,
+                                              height: 10,
+                                              label: '${(engine.activeAction!.progress * 100).toInt()}%',
+                                            ),
                                           ),
-                                        ),
+                                          const SizedBox(height: 4),
+                                          GestureDetector(
+                                            onTap: () {
+                                              engine.cancelAction();
+                                            },
+                                            child: const Text(
+                                              'Cancel',
+                                              style: TextStyle(
+                                                color: Colors.redAccent,
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
                                       )
                                     else
                                       ElevatedButton(
@@ -637,7 +836,6 @@ class _InventoryViewState extends State<InventoryView> with SingleTickerProvider
                                         onPressed: isCraftable
                                             ? () {
                                                 engine.startCrafting(recipe);
-                                                Navigator.pop(context);
                                               }
                                             : null,
                                         child: Text(
@@ -661,6 +859,8 @@ class _InventoryViewState extends State<InventoryView> with SingleTickerProvider
               ),
             ),
           ),
+        );
+          },
         );
       },
     );
@@ -1211,6 +1411,66 @@ class _InventoryViewState extends State<InventoryView> with SingleTickerProvider
                 _buildStatSheetRow(context, engine, SkillType.mining, equippedTools[SkillType.mining]),
                 const SizedBox(height: 10),
                 _buildStatSheetRow(context, engine, SkillType.herbalism, equippedTools[SkillType.herbalism]),
+                const SizedBox(height: 12),
+                const Divider(color: GameTheme.border, height: 1),
+                const SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        const Text('⚔️', style: TextStyle(fontSize: 18)),
+                        const SizedBox(width: 8),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Total Attack Power',
+                              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                            ),
+                            Text(
+                              engine.equippedWeapon != null ? engine.equippedWeapon!.name : 'Unarmed',
+                              style: const TextStyle(color: GameTheme.textMuted, fontSize: 11),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                    Text(
+                      '${engine.getPlayerAttack()}',
+                      style: const TextStyle(color: Colors.redAccent, fontSize: 14, fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        const Text('🛡️', style: TextStyle(fontSize: 18)),
+                        const SizedBox(width: 8),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Total Defense',
+                              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                            ),
+                            Text(
+                              engine.equippedArmor != null ? engine.equippedArmor!.name : 'No Armor',
+                              style: const TextStyle(color: GameTheme.textMuted, fontSize: 11),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                    Text(
+                      '${engine.getPlayerDefense()}',
+                      style: const TextStyle(color: Colors.blueAccent, fontSize: 14, fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                ),
               ],
             ),
           ),
@@ -1238,6 +1498,26 @@ class _InventoryViewState extends State<InventoryView> with SingleTickerProvider
 
           // 5. Herbalism Slot Card
           _buildToolSlotCard(context, engine, SkillType.herbalism),
+          const SizedBox(height: 16),
+
+          const Divider(color: GameTheme.border, height: 24),
+          const Text(
+            'COMBAT EQUIPMENT',
+            style: TextStyle(
+              color: GameTheme.accentGold,
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 1.2,
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // Weapon Slot Card
+          _buildWeaponSlotCard(context, engine),
+          const SizedBox(height: 12),
+
+          // Armor Slot Card
+          _buildArmorSlotCard(context, engine),
           const SizedBox(height: 16),
         ],
       ),
@@ -1417,6 +1697,324 @@ class _InventoryViewState extends State<InventoryView> with SingleTickerProvider
                 ),
               ],
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWeaponSlotCard(BuildContext context, GameEngine engine) {
+    final weapon = engine.equippedWeapon;
+
+    if (weapon == null) {
+      return Container(
+        padding: const EdgeInsets.all(16.0),
+        decoration: BoxDecoration(
+          color: const Color(0xFF10171E).withOpacity(0.4),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: GameTheme.border.withOpacity(0.3), width: 1.5),
+        ),
+        child: Row(
+          children: [
+            Opacity(
+              opacity: 0.4,
+              child: const Text(
+                '⚔️',
+                style: TextStyle(fontSize: 32),
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'No Weapon Equipped',
+                    style: TextStyle(
+                      color: GameTheme.textMuted,
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Equip a weapon from the Inventory tab.',
+                    style: TextStyle(color: GameTheme.textMuted, fontSize: 11),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Card(
+      color: const Color(0xFF1E2833),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: GameTheme.getSkillColor(SkillType.combat).withOpacity(0.5), width: 1.5),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12.0),
+        child: Row(
+          children: [
+            Text(
+              weapon.icon,
+              style: const TextStyle(fontSize: 32),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    weapon.name,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  const Text(
+                    'Weapon',
+                    style: TextStyle(color: Colors.redAccent, fontSize: 11, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '⚔️ +${weapon.attackPower} Attack Power',
+                    style: const TextStyle(color: Colors.redAccent, fontSize: 11),
+                  ),
+                ],
+              ),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: GameTheme.healthRed,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(6),
+                ),
+              ),
+              onPressed: () {
+                engine.unequipWeapon();
+              },
+              child: const Text(
+                'Unequip',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildArmorSlotCard(BuildContext context, GameEngine engine) {
+    final armor = engine.equippedArmor;
+
+    if (armor == null) {
+      return Container(
+        padding: const EdgeInsets.all(16.0),
+        decoration: BoxDecoration(
+          color: const Color(0xFF10171E).withOpacity(0.4),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: GameTheme.border.withOpacity(0.3), width: 1.5),
+        ),
+        child: Row(
+          children: [
+            Opacity(
+              opacity: 0.4,
+              child: const Text(
+                '🛡️',
+                style: TextStyle(fontSize: 32),
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'No Armor Equipped',
+                    style: TextStyle(
+                      color: GameTheme.textMuted,
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Equip armor from the Inventory tab.',
+                    style: TextStyle(color: GameTheme.textMuted, fontSize: 11),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Card(
+      color: const Color(0xFF1E2833),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: GameTheme.getSkillColor(SkillType.combat).withOpacity(0.5), width: 1.5),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12.0),
+        child: Row(
+          children: [
+            Text(
+              armor.icon,
+              style: const TextStyle(fontSize: 32),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    armor.name,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  const Text(
+                    'Armor',
+                    style: TextStyle(color: Colors.blueAccent, fontSize: 11, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '🛡️ +${armor.defense} Defense',
+                    style: const TextStyle(color: Colors.blueAccent, fontSize: 11),
+                  ),
+                ],
+              ),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: GameTheme.healthRed,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(6),
+                ),
+              ),
+              onPressed: () {
+                engine.unequipArmor();
+              },
+              child: const Text(
+                'Unequip',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildActiveActionHeader(BuildContext context, GameEngine engine, ActiveActionState activeAction) {
+    final String name;
+    final String icon;
+    final Color progressColor;
+
+    if (activeAction.recipe != null) {
+      final recipe = activeAction.recipe!;
+      name = recipe.requiredSkill == SkillType.cooking ? 'Cooking: ${recipe.name}' : 'Crafting: ${recipe.name}';
+      icon = recipe.icon;
+      progressColor = GameTheme.getSkillColor(recipe.requiredSkill);
+    } else if (activeAction.structure != null) {
+      final structure = activeAction.structure!;
+      name = 'Building: ${structure.name}';
+      icon = structure.icon;
+      progressColor = GameTheme.craftingCyan;
+    } else if (activeAction.action != null) {
+      final action = activeAction.action!;
+      name = action.name;
+      icon = action.requiredSkill?.icon ?? '⚡';
+      progressColor = action.requiredSkill != null ? GameTheme.getSkillColor(action.requiredSkill!) : GameTheme.accentGold;
+    } else {
+      return const SizedBox.shrink();
+    }
+
+    final progress = activeAction.progress;
+    final percent = (progress * 100).toInt();
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E2833),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: progressColor.withOpacity(0.4), width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.2),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Text(
+            icon,
+            style: const TextStyle(fontSize: 24),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        name,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    Text(
+                      '$percent%',
+                      style: TextStyle(
+                        color: progressColor,
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                CustomProgressBar(
+                  progress: progress,
+                  color: progressColor,
+                  height: 10,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          IconButton(
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+            icon: const Icon(Icons.cancel, color: Colors.redAccent, size: 20),
+            onPressed: () {
+              engine.cancelAction();
+            },
           ),
         ],
       ),

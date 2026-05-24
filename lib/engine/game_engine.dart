@@ -10,6 +10,7 @@ import '../models/zone.dart';
 import '../models/masterwork.dart';
 import '../models/recipe.dart';
 import '../models/structure.dart';
+import '../models/beast.dart';
 import 'activity_log.dart';
 
 class ActiveActionState {
@@ -44,6 +45,34 @@ class ActiveActionState {
       targetZoneId: targetZoneId ?? this.targetZoneId,
       progress: progress ?? this.progress,
       durationSeconds: durationSeconds ?? this.durationSeconds,
+    );
+  }
+}
+
+class CombatState {
+  final Beast beast;
+  final int beastCurrentHealth;
+  final int playerStartHealth;
+  final List<String> combatLog;
+
+  const CombatState({
+    required this.beast,
+    required this.beastCurrentHealth,
+    required this.playerStartHealth,
+    required this.combatLog,
+  });
+
+  CombatState copyWith({
+    Beast? beast,
+    int? beastCurrentHealth,
+    int? playerStartHealth,
+    List<String>? combatLog,
+  }) {
+    return CombatState(
+      beast: beast ?? this.beast,
+      beastCurrentHealth: beastCurrentHealth ?? this.beastCurrentHealth,
+      playerStartHealth: playerStartHealth ?? this.playerStartHealth,
+      combatLog: combatLog ?? this.combatLog,
     );
   }
 }
@@ -87,6 +116,9 @@ class GameEngine extends ChangeNotifier {
 
   int _maxEquipmentSlots = 1;
   final Map<SkillType, Item> _equippedTools = {};
+  Item? _equippedWeapon;
+  Item? _equippedArmor;
+  CombatState? _activeCombat;
 
   ActiveActionState? _activeAction;
   Timer? _actionTimer;
@@ -110,6 +142,108 @@ class GameEngine extends ChangeNotifier {
   PlayerStats get playerStats => _playerStats;
   set playerStats(PlayerStats val) {
     _playerStats = val;
+    notifyListeners();
+  }
+
+  Item? get equippedWeapon => _equippedWeapon;
+  Item? get equippedArmor => _equippedArmor;
+  CombatState? get activeCombat => _activeCombat;
+
+  int getPlayerAttack() {
+    int base = 5;
+    if (_equippedWeapon != null) {
+      base += _equippedWeapon!.attackPower;
+    }
+    // Combat Perk 10 (Slayer's Might): +3 Attack power
+    final combatSkill = _skills[SkillType.combat];
+    if (combatSkill != null && combatSkill.levelCap > 10) {
+      base += 3;
+    }
+    return base;
+  }
+
+  int getPlayerDefense() {
+    int base = 0;
+    if (_equippedArmor != null) {
+      base += _equippedArmor!.defense;
+    }
+    // Combat Perk 10 (Slayer's Might): +1 Defense
+    final combatSkill = _skills[SkillType.combat];
+    if (combatSkill != null && combatSkill.levelCap > 10) {
+      base += 1;
+    }
+    return base;
+  }
+
+  void equipWeapon(Item item) {
+    if (item.type != ItemType.weapon) return;
+    if (!_inventory.hasItem(item.id, 1)) return;
+
+    // Remove from inventory
+    _inventory = _inventory.removeItem(item.id, 1);
+
+    // Unequip current weapon if any
+    if (_equippedWeapon != null) {
+      if (_inventory.isFull) {
+        log("Inventory is full! Cannot unequip current weapon.", LogType.error);
+        _inventory = _inventory.addItem(item, 1);
+        return;
+      }
+      _inventory = _inventory.addItem(_equippedWeapon!, 1);
+    }
+
+    _equippedWeapon = item;
+    log("Equipped ⚔️ ${item.name} (Attack +${item.attackPower}).", LogType.success);
+    notifyListeners();
+  }
+
+  void unequipWeapon() {
+    if (_equippedWeapon == null) return;
+    if (_inventory.isFull) {
+      log("Inventory is full! Cannot unequip current weapon.", LogType.error);
+      return;
+    }
+
+    final tool = _equippedWeapon!;
+    _equippedWeapon = null;
+    _inventory = _inventory.addItem(tool, 1);
+    log("Unequipped ⚔️ ${tool.name}.", LogType.info);
+    notifyListeners();
+  }
+
+  void equipArmor(Item item) {
+    if (item.type != ItemType.armor) return;
+    if (!_inventory.hasItem(item.id, 1)) return;
+
+    // Remove from inventory
+    _inventory = _inventory.removeItem(item.id, 1);
+
+    // Unequip current armor if any
+    if (_equippedArmor != null) {
+      if (_inventory.isFull) {
+        log("Inventory is full! Cannot unequip current armor.", LogType.error);
+        _inventory = _inventory.addItem(item, 1);
+        return;
+      }
+      _inventory = _inventory.addItem(_equippedArmor!, 1);
+    }
+
+    _equippedArmor = item;
+    log("Equipped 🛡️ ${item.name} (Defense +${item.defense}).", LogType.success);
+    notifyListeners();
+  }
+
+  void unequipArmor() {
+    if (_equippedArmor == null) return;
+    if (_inventory.isFull) {
+      log("Inventory is full! Cannot unequip current armor.", LogType.error);
+      return;
+    }
+
+    final armor = _equippedArmor!;
+    _equippedArmor = null;
+    _inventory = _inventory.addItem(armor, 1);
+    log("Unequipped 🛡️ ${armor.name}.", LogType.info);
     notifyListeners();
   }
 
@@ -328,6 +462,12 @@ class GameEngine extends ChangeNotifier {
 
   // Timer Tick Action
   void startAction(ZoneAction action) {
+    // 0. Combat specific health check
+    if (action.isCombat && _playerStats.currentHealth <= 0) {
+      log("You are too weak to fight! Rest at the Town Inn or eat food.", LogType.error);
+      return;
+    }
+
     // 1. Skill requirement check
     if (action.requiredSkill != null) {
       final skill = _skills[action.requiredSkill!];
@@ -361,6 +501,21 @@ class GameEngine extends ChangeNotifier {
     // Cancel previous
     cancelAction();
 
+    // Initialize combat state if combat action
+    if (action.isCombat && action.beastId != null) {
+      final beast = Beasts.findById(action.beastId!);
+      if (beast == null) {
+        log("Error: Beast ${action.beastId} not found!", LogType.error);
+        return;
+      }
+      _activeCombat = CombatState(
+        beast: beast,
+        beastCurrentHealth: beast.maxHealth,
+        playerStartHealth: _playerStats.currentHealth,
+        combatLog: ["Tracked down ${beast.icon} ${beast.name}!"],
+      );
+    }
+
     // Calculate speed bonus from skill level and equipped tools
     double speedBonus = 0.0;
     if (action.requiredSkill != null) {
@@ -370,8 +525,17 @@ class GameEngine extends ChangeNotifier {
     // Apply zone speed modifiers
     // Duration = BaseDuration / (1 + speedBonus) / zoneSpeedModifier
     double duration = action.durationSeconds.toDouble();
-    duration = duration / (1.0 + speedBonus);
-    duration = duration / _currentZone.speedModifier;
+    if (action.isCombat) {
+      // Combat round duration is fixed at 1.5s, modified by Combat Perk 20
+      duration = 1.5;
+      final combatSkill = _skills[SkillType.combat];
+      if (combatSkill != null && combatSkill.levelCap > 20) {
+        duration = duration / 1.15; // 15% speed increase
+      }
+    } else {
+      duration = duration / (1.0 + speedBonus);
+      duration = duration / _currentZone.speedModifier;
+    }
     if (duration < 1.0) duration = 1.0;
 
     _activeAction = ActiveActionState(
@@ -391,14 +555,77 @@ class GameEngine extends ChangeNotifier {
       double progress = currentTick / totalTicks;
 
       if (progress >= 1.0) {
-        _activeAction = _activeAction!.copyWith(progress: 1.0);
-        timer.cancel();
-        _completeAction();
+        if (_activeCombat != null) {
+          // Combat round completes
+          _executeCombatRound(action);
+          
+          if (_activeCombat!.beastCurrentHealth <= 0) {
+            // Beast is dead! End action.
+            _activeAction = _activeAction!.copyWith(progress: 1.0);
+            timer.cancel();
+            _completeAction();
+          } else if (_playerStats.currentHealth <= 0) {
+            // Player is dead! Faint.
+            timer.cancel();
+            faint();
+          } else {
+            // Both alive: reset tick for next round
+            currentTick = 0;
+            _activeAction = _activeAction!.copyWith(progress: 0.0);
+            notifyListeners();
+          }
+        } else {
+          // Normal action completes
+          _activeAction = _activeAction!.copyWith(progress: 1.0);
+          timer.cancel();
+          _completeAction();
+        }
       } else {
         _activeAction = _activeAction!.copyWith(progress: progress);
         notifyListeners();
       }
     });
+  }
+
+  void _executeCombatRound(ZoneAction action) {
+    if (_activeCombat == null) return;
+
+    final beast = _activeCombat!.beast;
+    
+    // Player attacks Beast
+    int playerDamage = max(1, getPlayerAttack() - beast.defense);
+    final variance = 0.85 + _random.nextDouble() * 0.30;
+    playerDamage = (playerDamage * variance).round().clamp(1, 9999);
+
+    int nextBeastHealth = max(0, _activeCombat!.beastCurrentHealth - playerDamage);
+    
+    final updatedLog = List<String>.from(_activeCombat!.combatLog);
+    updatedLog.add("⚔️ You strike ${beast.name} for $playerDamage damage!");
+
+    _activeCombat = _activeCombat!.copyWith(
+      beastCurrentHealth: nextBeastHealth,
+      combatLog: updatedLog,
+    );
+
+    if (nextBeastHealth <= 0) {
+      updatedLog.add("🎉 ${beast.name} has been defeated!");
+      return;
+    }
+
+    // Beast attacks Player
+    int beastDamage = max(1, beast.attackPower - getPlayerDefense());
+    final beastVariance = 0.85 + _random.nextDouble() * 0.30;
+    beastDamage = (beastDamage * beastVariance).round().clamp(1, 9999);
+
+    int nextPlayerHealth = max(0, _playerStats.currentHealth - beastDamage);
+    updatedLog.add("${beast.icon} ${beast.name} strikes you for $beastDamage damage!");
+
+    _playerStats = _playerStats.copyWith(currentHealth: nextPlayerHealth);
+    _activeCombat = _activeCombat!.copyWith(combatLog: updatedLog);
+
+    if (nextPlayerHealth <= 0) {
+      updatedLog.add("💀 You collapsed from your wounds...");
+    }
   }
 
   bool canCraftRecipe(Recipe recipe) {
@@ -581,11 +808,82 @@ class GameEngine extends ChangeNotifier {
   void cancelAction() {
     _actionTimer?.cancel();
     _activeAction = null;
+    _activeCombat = null;
     notifyListeners();
   }
 
   void _completeAction() {
     if (_activeAction == null) return;
+
+    if (_activeAction!.action != null && _activeAction!.action!.isCombat) {
+      final action = _activeAction!.action!;
+      // 1. Deduct Energy
+      final actualEnergyCost = getModifiedEnergyCost(action.energyCost, action.requiredSkill ?? SkillType.combat);
+      int newEnergy = _playerStats.currentEnergy - actualEnergyCost;
+      newEnergy = newEnergy.clamp(0, _playerStats.maxEnergy);
+      _playerStats = _playerStats.copyWith(currentEnergy: newEnergy);
+
+      // 2. Award Combat XP
+      final oldSkill = _skills[SkillType.combat]!;
+      final xpReward = action.xpReward * getXpMultiplier();
+      final newSkill = oldSkill.addXp(xpReward);
+      _skills[SkillType.combat] = newSkill;
+
+      if (newSkill.level > oldSkill.level) {
+        log("Level Up! Your Combat is now Level ${newSkill.level}!", LogType.levelUp);
+      } else if (newSkill.isGated && !oldSkill.isGated) {
+        log("Limit Reached! Level ${newSkill.levelCap} Masterwork Trial is now unlocked. Check the Skills tab.", LogType.warning);
+      }
+
+      // 3. Award Monster drops (with double loot perk check)
+      bool doubleLoot = false;
+      if (oldSkill.levelCap > 20) {
+        if (_random.nextDouble() <= 0.15) {
+          doubleLoot = true;
+        }
+      }
+
+      bool inventoryFullError = false;
+      final beast = _activeCombat?.beast;
+      if (beast != null) {
+        for (var loot in beast.lootTable) {
+          final roll = _random.nextDouble();
+          if (roll <= loot.chance) {
+            int qty = loot.minQuantity;
+            if (loot.maxQuantity > loot.minQuantity) {
+              qty = loot.minQuantity + _random.nextInt(loot.maxQuantity - loot.minQuantity + 1);
+            }
+            if (doubleLoot) {
+              qty *= 2;
+            }
+            if (_inventory.isFull) {
+              inventoryFullError = true;
+            } else {
+              _inventory = _inventory.addItem(loot.item, qty);
+              log("Defeated ${beast.name}! Obtained: ${loot.item.icon} ${loot.item.name} x$qty", LogType.success);
+            }
+          }
+        }
+      }
+
+      if (doubleLoot && !inventoryFullError) {
+        log("✨ Gladiator's Grace Perk: Yield quantities doubled!", LogType.success);
+      }
+
+      if (inventoryFullError) {
+        log("Your inventory is full! Some monster drops were lost.", LogType.error);
+      }
+
+      log("Success! Finished Hunting ${beast?.name ?? action.name} (+${xpReward.toInt()} Combat XP).", LogType.success);
+
+      _activeCombat = null;
+      _activeAction = null;
+      notifyListeners();
+
+      // Auto-repeat
+      startAction(action);
+      return;
+    }
 
     if (_activeAction!.structure != null) {
       final structure = _activeAction!.structure!;
@@ -682,6 +980,9 @@ class GameEngine extends ChangeNotifier {
 
       _activeAction = null;
       notifyListeners();
+
+      // Auto-repeat recipe if requirements are met
+      startCrafting(recipe);
       return;
     }
 
@@ -1000,6 +1301,9 @@ class GameEngine extends ChangeNotifier {
 
     _activeAction = null;
     notifyListeners();
+
+    // Auto-repeat zone action if possible
+    startAction(action);
   }
 
   // Consuming Food
@@ -1242,6 +1546,9 @@ class GameEngine extends ChangeNotifier {
     _activeMasterwork = null;
     _equippedTools.clear();
     _maxEquipmentSlots = 1;
+    _equippedWeapon = null;
+    _equippedArmor = null;
+    _activeCombat = null;
     _explorationProgress.clear();
     _explorationProgress['explore_forest_paths'] = 0.0;
     _explorationProgress['explore_rocky_trails'] = 0.0;

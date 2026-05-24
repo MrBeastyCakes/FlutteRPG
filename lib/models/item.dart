@@ -4,6 +4,8 @@ enum ItemType {
   resource,
   food,
   tool,
+  weapon,
+  armor,
 }
 
 class Item {
@@ -23,6 +25,10 @@ class Item {
   final double speedBonus; // e.g. 0.15 = 15% speed increase (decreased action duration)
   final double successBonus; // e.g. 0.05 = +5% chance of success
 
+  // Combat specific fields
+  final int attackPower;
+  final int defense;
+
   const Item({
     required this.id,
     required this.name,
@@ -35,10 +41,14 @@ class Item {
     this.toolSkill,
     this.speedBonus = 0.0,
     this.successBonus = 0.0,
+    this.attackPower = 0,
+    this.defense = 0,
   });
 
   bool get isFood => type == ItemType.food;
   bool get isTool => type == ItemType.tool;
+  bool get isWeapon => type == ItemType.weapon;
+  bool get isArmor => type == ItemType.armor;
 
   @override
   bool operator ==(Object other) =>
@@ -460,6 +470,125 @@ class Items {
     energyAmount: 0,
   );
 
+  // Weapons
+  static const Item bronzeSword = Item(
+    id: 'bronze_sword',
+    name: 'Bronze Sword',
+    description: 'A sharp bronze sword forged from copper and tin.',
+    icon: '⚔️',
+    type: ItemType.weapon,
+    value: 150,
+    attackPower: 8,
+  );
+
+  static const Item ironSword = Item(
+    id: 'iron_sword',
+    name: 'Iron Sword',
+    description: 'A heavy iron sword that deals high damage.',
+    icon: '⚔️',
+    type: ItemType.weapon,
+    value: 250,
+    attackPower: 16,
+  );
+
+  static const Item steelGreatsword = Item(
+    id: 'steel_greatsword',
+    name: 'Steel Greatsword',
+    description: 'A legendary greatsword of immense attack power.',
+    icon: '⚔️',
+    type: ItemType.weapon,
+    value: 500,
+    attackPower: 28,
+  );
+
+  // Armor
+  static const Item leatherChest = Item(
+    id: 'leather_chest',
+    name: 'Leather Jerkin',
+    description: 'A cured leather vest providing basic protection.',
+    icon: '🛡️',
+    type: ItemType.armor,
+    value: 120,
+    defense: 2,
+  );
+
+  static const Item bronzeChest = Item(
+    id: 'bronze_chest',
+    name: 'Bronze Scale',
+    description: 'A chainmail scale armor made of bronze plates.',
+    icon: '🛡️',
+    type: ItemType.armor,
+    value: 200,
+    defense: 5,
+  );
+
+  static const Item steelPlate = Item(
+    id: 'steel_plate',
+    name: 'Steel Cuirass',
+    description: 'Heavy steel plate mail offering supreme defense.',
+    icon: '🛡️',
+    type: ItemType.armor,
+    value: 450,
+    defense: 10,
+  );
+
+  // Monster Drops
+  static const Item boarMeat = Item(
+    id: 'boar_meat',
+    name: 'Boar Meat',
+    description: 'Tough wild game meat. Restores health and energy.',
+    icon: '🍖',
+    type: ItemType.food,
+    value: 8,
+    healAmount: 20,
+    energyAmount: 5,
+  );
+
+  static const Item boarTusk = Item(
+    id: 'boar_tusk',
+    name: 'Boar Tusk',
+    description: 'A sharp curved ivory tusk from a forest boar.',
+    icon: '🐗',
+    type: ItemType.resource,
+    value: 10,
+  );
+
+  static const Item spiderSilk = Item(
+    id: 'spider_silk',
+    name: 'Spider Silk',
+    description: 'Extraordinarily strong web thread from a cave spider.',
+    icon: '🕸️',
+    type: ItemType.resource,
+    value: 12,
+  );
+
+  static const Item spiderFang = Item(
+    id: 'spider_fang',
+    name: 'Spider Fang',
+    description: 'A venom-coated fang from a giant cave spider.',
+    icon: '🕷️',
+    type: ItemType.resource,
+    value: 15,
+  );
+
+  static const Item wolfPelt = Item(
+    id: 'wolf_pelt',
+    name: 'Wolf Pelt',
+    description: 'Thick, warm fur pelt from a shadow wolf.',
+    icon: '🐺',
+    type: ItemType.resource,
+    value: 25,
+  );
+
+  static const Item trollClaw = Item(
+    id: 'troll_claw',
+    name: 'Troll Claw',
+    description: 'A jagged, stone-hard claw of a cavern troll.',
+    icon: '👹',
+    type: ItemType.resource,
+    value: 45,
+  );
+
   static const List<Item> all = [
     oakLog,
     willowLog,
@@ -499,6 +628,18 @@ class Items {
     elixirOfLife3,
     glyphSwiftness,
     glyphFortitude,
+    bronzeSword,
+    ironSword,
+    steelGreatsword,
+    leatherChest,
+    bronzeChest,
+    steelPlate,
+    boarMeat,
+    boarTusk,
+    spiderSilk,
+    spiderFang,
+    wolfPelt,
+    trollClaw,
   ];
 
   static Item? findById(String id) {

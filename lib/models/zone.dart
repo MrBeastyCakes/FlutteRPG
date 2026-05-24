@@ -27,6 +27,8 @@ class ZoneAction {
   final int requiredLevel;
   final double xpReward;
   final List<LootDrop> lootTable;
+  final bool isCombat;
+  final String? beastId;
 
   const ZoneAction({
     required this.id,
@@ -40,6 +42,8 @@ class ZoneAction {
     this.requiredLevel = 1,
     required this.xpReward,
     required this.lootTable,
+    this.isCombat = false,
+    this.beastId,
   });
 }
 
@@ -200,6 +204,22 @@ class Zones {
         xpReward: 35,
         lootTable: [],
       ),
+      ZoneAction(
+        id: 'hunt_boar',
+        name: 'Hunt Forest Boar',
+        description: 'Track and battle a wild forest boar.',
+        durationSeconds: 5,
+        energyCost: 6,
+        requiredSkill: SkillType.combat,
+        requiredLevel: 1,
+        xpReward: 35,
+        lootTable: [
+          LootDrop(item: Items.boarMeat, chance: 0.85, minQuantity: 1, maxQuantity: 2),
+          LootDrop(item: Items.boarTusk, chance: 0.40, minQuantity: 1, maxQuantity: 1),
+        ],
+        isCombat: true,
+        beastId: 'forest_boar',
+      ),
     ],
   );
 
@@ -252,6 +272,22 @@ class Zones {
           LootDrop(item: Items.riverClay, chance: 0.85, minQuantity: 1, maxQuantity: 2),
         ],
       ),
+      ZoneAction(
+        id: 'hunt_wolf',
+        name: 'Hunt Shadow Wolf',
+        description: 'Track and battle a dangerous shadow wolf.',
+        durationSeconds: 6,
+        energyCost: 8,
+        requiredSkill: SkillType.combat,
+        requiredLevel: 5,
+        xpReward: 55,
+        lootTable: [
+          LootDrop(item: Items.wolfPelt, chance: 0.75, minQuantity: 1, maxQuantity: 1),
+          LootDrop(item: Items.boarMeat, chance: 0.50, minQuantity: 1, maxQuantity: 2),
+        ],
+        isCombat: true,
+        beastId: 'shadow_wolf',
+      ),
     ],
   );
 
@@ -301,6 +337,22 @@ class Zones {
         xpReward: 40,
         lootTable: [],
       ),
+      ZoneAction(
+        id: 'hunt_spider',
+        name: 'Exterminate Cave Spider',
+        description: 'Clear out a giant venomous cave spider.',
+        durationSeconds: 5,
+        energyCost: 7,
+        requiredSkill: SkillType.combat,
+        requiredLevel: 2,
+        xpReward: 45,
+        lootTable: [
+          LootDrop(item: Items.spiderSilk, chance: 0.80, minQuantity: 1, maxQuantity: 2),
+          LootDrop(item: Items.spiderFang, chance: 0.35, minQuantity: 1, maxQuantity: 1),
+        ],
+        isCombat: true,
+        beastId: 'cave_spider',
+      ),
     ],
   );
 
@@ -328,6 +380,22 @@ class Zones {
         lootTable: [
           LootDrop(item: Items.ironOre, chance: 0.70),
         ],
+      ),
+      ZoneAction(
+        id: 'hunt_troll',
+        name: 'Slay Cavern Troll',
+        description: 'Engage a massive cavern troll in a life-or-death battle.',
+        durationSeconds: 8,
+        energyCost: 12,
+        requiredSkill: SkillType.combat,
+        requiredLevel: 10,
+        xpReward: 90,
+        lootTable: [
+          LootDrop(item: Items.trollClaw, chance: 0.70, minQuantity: 1, maxQuantity: 1),
+          LootDrop(item: Items.ironOre, chance: 0.40, minQuantity: 1, maxQuantity: 2),
+        ],
+        isCombat: true,
+        beastId: 'cavern_troll',
       ),
     ],
   );
