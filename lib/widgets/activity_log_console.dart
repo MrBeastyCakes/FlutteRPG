@@ -20,6 +20,8 @@ class ActivityLogConsole extends StatelessWidget {
         return GameTheme.accentGold;
       case LogType.info:
         return GameTheme.textMuted;
+      case LogType.worldEvent:
+        return Colors.cyanAccent;
     }
   }
 
@@ -89,7 +91,10 @@ class ActivityLogConsole extends StatelessWidget {
                               ),
                               TextSpan(
                                 text: entry.message,
-                                style: TextStyle(color: logColor),
+                                style: TextStyle(
+                                  color: logColor,
+                                  fontWeight: entry.type == LogType.worldEvent ? FontWeight.bold : FontWeight.normal,
+                                ),
                               ),
                             ],
                           ),

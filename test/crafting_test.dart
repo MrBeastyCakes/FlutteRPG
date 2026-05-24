@@ -11,6 +11,8 @@ void main() {
 
     setUp(() {
       engine = GameEngine();
+      engine.stationInstances['town_square::crafting_bench']?.isRuined = false;
+      engine.stationInstances['town_square::field_kitchen']?.isRuined = false;
     });
 
     test('Initial backpack capacity is exactly 4', () {
@@ -57,7 +59,7 @@ void main() {
       expect(recipe.requiredLevel, 5);
       expect(recipe.inputs['oak_log'], 15);
       expect(recipe.inputs['river_clay'], 10);
-      expect(recipe.inputs['copper_ore'], 5);
+      expect(recipe.inputs['copper_ingot'], 5);
 
       // Upgrade capacity to 9 using Backpack Upgrade
       engine.buyItem(Items.backpackUpgrade);
@@ -71,7 +73,7 @@ void main() {
       expect(recipe.requiredLevel, 7);
       expect(recipe.inputs['willow_log'], 20);
       expect(recipe.inputs['river_clay'], 15);
-      expect(recipe.inputs['tin_ore'], 5);
+      expect(recipe.inputs['tin_ingot'], 5);
 
       // Upgrade capacity to 10
       engine.buyItem(Items.backpackUpgrade);
@@ -84,7 +86,7 @@ void main() {
       expect(recipe.name, 'Backpack Upgrade (Tier 3)');
       expect(recipe.requiredLevel, 9);
       expect(recipe.inputs['willow_log'], 25);
-      expect(recipe.inputs['iron_ore'], 10);
+      expect(recipe.inputs['iron_ingot'], 10);
 
       // Upgrade capacity to 11
       engine.buyItem(Items.backpackUpgrade);
@@ -97,7 +99,7 @@ void main() {
       expect(recipe.name, 'Backpack Upgrade (Tier 4)');
       expect(recipe.requiredLevel, 11);
       expect(recipe.inputs['willow_log'], 30); // 25 + (11 - 10) * 5
-      expect(recipe.inputs['iron_ore'], 15);  // 10 + (11 - 10) * 5
+      expect(recipe.inputs['iron_ingot'], 15);  // 10 + (11 - 10) * 5
     });
 
     test('Tool upgrade recipes (Stone Axe -> Copper Axe -> Bronze Axe -> Iron Axe)', () {
@@ -113,7 +115,7 @@ void main() {
 
       // 2. Buy resources for Copper Axe
       for (int i = 0; i < 5; i++) {
-        engine.buyItem(Items.copperOre);
+        engine.buyItem(Items.copperIngot);
         engine.buyItem(Items.oakLog);
       }
       // Add Stone Axe since it is no longer in starting inventory
@@ -122,7 +124,8 @@ void main() {
       // Perform Copper Axe Crafting
       final copperAxeRecipe = Recipes.copperAxe;
       engine.startCrafting(copperAxeRecipe);
-      expect(engine.activeAction?.recipe?.id, 'copper_axe');
+      final stationKey = "${engine.currentZone.id}::crafting_bench";
+      expect(engine.stationInstances[stationKey]?.currentCraft?.recipe?.id, 'copper_axe');
 
       // Complete crafting
       // Simulate completion by manually invoking engine._completeAction() since timer is async
@@ -133,54 +136,54 @@ void main() {
       // Let's verify the inputs/outputs and level requirements of the recipes directly!
       expect(copperAxeRecipe.requiredLevel, 5);
       expect(copperAxeRecipe.inputs['stone_axe'], 1);
-      expect(copperAxeRecipe.inputs['copper_ore'], 5);
-      expect(copperAxeRecipe.inputs['oak_log'], 5);
+      expect(copperAxeRecipe.inputs['copper_ingot'], 2);
+      expect(copperAxeRecipe.inputs['oak_log'], 3);
       expect(copperAxeRecipe.resultItemId, 'copper_axe');
 
       // Verify Bronze Axe Recipe
       final bronzeAxeRecipe = Recipes.bronzeAxe;
       expect(bronzeAxeRecipe.requiredLevel, 8);
       expect(bronzeAxeRecipe.inputs['copper_axe'], 1);
-      expect(bronzeAxeRecipe.inputs['tin_ore'], 5);
-      expect(bronzeAxeRecipe.inputs['oak_log'], 5);
+      expect(bronzeAxeRecipe.inputs['bronze_ingot'], 2);
+      expect(bronzeAxeRecipe.inputs['oak_log'], 3);
       expect(bronzeAxeRecipe.resultItemId, 'bronze_axe');
 
       // Verify Iron Axe Recipe
       final ironAxeRecipe = Recipes.ironAxe;
       expect(ironAxeRecipe.requiredLevel, 12);
       expect(ironAxeRecipe.inputs['bronze_axe'], 1);
-      expect(ironAxeRecipe.inputs['iron_ore'], 5);
-      expect(ironAxeRecipe.inputs['willow_log'], 5);
+      expect(ironAxeRecipe.inputs['iron_ingot'], 3);
+      expect(ironAxeRecipe.inputs['willow_log'], 3);
       expect(ironAxeRecipe.resultItemId, 'iron_axe');
     });
 
     test('Pickaxe upgrade recipe structures', () {
       expect(Recipes.copperPickaxe.requiredLevel, 5);
       expect(Recipes.copperPickaxe.inputs['stone_pickaxe'], 1);
-      expect(Recipes.copperPickaxe.inputs['copper_ore'], 5);
-      expect(Recipes.copperPickaxe.inputs['oak_log'], 5);
+      expect(Recipes.copperPickaxe.inputs['copper_ingot'], 2);
+      expect(Recipes.copperPickaxe.inputs['oak_log'], 3);
 
       expect(Recipes.bronzePickaxe.requiredLevel, 8);
       expect(Recipes.bronzePickaxe.inputs['copper_pickaxe'], 1);
-      expect(Recipes.bronzePickaxe.inputs['tin_ore'], 5);
-      expect(Recipes.bronzePickaxe.inputs['oak_log'], 5);
+      expect(Recipes.bronzePickaxe.inputs['bronze_ingot'], 2);
+      expect(Recipes.bronzePickaxe.inputs['oak_log'], 3);
 
       expect(Recipes.ironPickaxe.requiredLevel, 12);
       expect(Recipes.ironPickaxe.inputs['bronze_pickaxe'], 1);
-      expect(Recipes.ironPickaxe.inputs['iron_ore'], 5);
-      expect(Recipes.ironPickaxe.inputs['willow_log'], 5);
+      expect(Recipes.ironPickaxe.inputs['iron_ingot'], 3);
+      expect(Recipes.ironPickaxe.inputs['willow_log'], 3);
     });
 
     test('Foraging gloves upgrade structures', () {
       expect(Recipes.reinforcedGloves.requiredLevel, 7);
       expect(Recipes.reinforcedGloves.inputs['foraging_gloves'], 1);
-      expect(Recipes.reinforcedGloves.inputs['river_clay'], 5);
-      expect(Recipes.reinforcedGloves.inputs['wildflower'], 3);
+      expect(Recipes.reinforcedGloves.inputs['cured_leather'], 2);
+      expect(Recipes.reinforcedGloves.inputs['river_clay'], 3);
 
       expect(Recipes.masterworkGloves.requiredLevel, 12);
       expect(Recipes.masterworkGloves.inputs['reinforced_gloves'], 1);
+      expect(Recipes.masterworkGloves.inputs['treated_silk'], 2);
       expect(Recipes.masterworkGloves.inputs['nightshade'], 3);
-      expect(Recipes.masterworkGloves.inputs['willow_log'], 5);
     });
 
     test('Potato cooking recipe upgrade structures', () {
@@ -194,7 +197,8 @@ void main() {
 
       expect(Recipes.loadedPotato.requiredLevel, 10);
       expect(Recipes.loadedPotato.inputs['buttered_potato'], 1);
-      expect(Recipes.loadedPotato.inputs['cooked_fish'], 1); // trout bacon
+      expect(Recipes.loadedPotato.inputs['cooked_fish'], 1);
+      expect(Recipes.loadedPotato.inputs['boar_meat'], 1);
     });
 
     test('Trout cooking and smoking structures', () {
@@ -255,7 +259,7 @@ void main() {
       engine.inventory = engine.inventory.copyWith(capacity: 20);
       engine.playerStats = engine.playerStats.copyWith(gold: 2000);
       for (int i = 0; i < 5; i++) {
-        engine.buyItem(Items.copperOre);
+        engine.buyItem(Items.copperIngot);
         engine.buyItem(Items.oakLog);
       }
       // Add Stone Axe since it is no longer in starting inventory
@@ -278,7 +282,8 @@ void main() {
 
       // 5. Try to craft and verify it succeeds in starting
       engine.startCrafting(Recipes.copperAxe);
-      expect(engine.activeAction?.recipe?.id, 'copper_axe');
+      final stationKey = "${engine.currentZone.id}::crafting_bench";
+      expect(engine.stationInstances[stationKey]?.currentCraft?.recipe?.id, 'copper_axe');
     });
   });
 }

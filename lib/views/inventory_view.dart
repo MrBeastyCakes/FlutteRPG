@@ -1,3 +1,4 @@
+import 'dart:math' show max, min;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -6,8 +7,14 @@ import '../models/item.dart';
 import '../models/zone.dart';
 import '../models/recipe.dart';
 import '../models/skill.dart';
+import '../models/shop.dart';
+import '../models/inventory.dart';
+import '../models/crafted_item.dart';
 import '../theme/game_theme.dart';
 import '../widgets/custom_progress_bar.dart';
+import '../widgets/item_dashboard_modal.dart';
+import '../widgets/bounce_tap.dart';
+import '../widgets/coin_animation.dart';
 
 class InventoryView extends StatefulWidget {
   const InventoryView({super.key});
@@ -18,6 +25,8 @@ class InventoryView extends StatefulWidget {
 
 class _InventoryViewState extends State<InventoryView> with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  ShopCategory? _selectedShopCategory;
+  String _selectedQualityFilter = 'All';
 
   @override
   void initState() {
@@ -73,6 +82,21 @@ class _InventoryViewState extends State<InventoryView> with SingleTickerProvider
 
   Widget _buildInventoryTab(
       BuildContext context, GameEngine engine, dynamic inventory, int gold) {
+    final filteredSlots = inventory.slots.where((slot) {
+      final q = slot.quality;
+      if (_selectedQualityFilter == 'All') return true;
+      if (_selectedQualityFilter == 'Standard+') {
+        return q == null || q == QualityTier.standard || q == QualityTier.fine || q == QualityTier.masterwork;
+      }
+      if (_selectedQualityFilter == 'Fine+') {
+        return q == QualityTier.fine || q == QualityTier.masterwork;
+      }
+      if (_selectedQualityFilter == 'Masterwork only') {
+        return q == QualityTier.masterwork;
+      }
+      return true;
+    }).toList();
+
     return Padding(
       padding: const EdgeInsets.all(12.0),
       child: Column(
@@ -103,7 +127,44 @@ class _InventoryViewState extends State<InventoryView> with SingleTickerProvider
             ],
           ),
           const SizedBox(height: 12),
-          // 28 Slot Grid
+
+          // Quality filter chips
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: ['All', 'Standard+', 'Fine+', 'Masterwork only'].map((filter) {
+                final isSelected = _selectedQualityFilter == filter;
+                return Padding(
+                  padding: const EdgeInsets.only(right: 8.0),
+                  child: ChoiceChip(
+                    label: Text(filter, style: const TextStyle(fontSize: 12)),
+                    selected: isSelected,
+                    onSelected: (selected) {
+                      if (selected) {
+                        setState(() {
+                          _selectedQualityFilter = filter;
+                        });
+                      }
+                    },
+                    selectedColor: GameTheme.accentGold.withOpacity(0.2),
+                    checkmarkColor: GameTheme.accentGold,
+                    labelStyle: TextStyle(
+                      color: isSelected ? GameTheme.accentGold : GameTheme.textMuted,
+                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                    ),
+                    backgroundColor: const Color(0xFF1E2833),
+                    side: BorderSide(
+                      color: isSelected ? GameTheme.accentGold : GameTheme.border,
+                      width: 1,
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // Grid View
           Expanded(
             child: GridView.builder(
               itemCount: inventory.capacity,
@@ -113,19 +174,42 @@ class _InventoryViewState extends State<InventoryView> with SingleTickerProvider
                 mainAxisSpacing: 8,
               ),
               itemBuilder: (context, index) {
-                if (index < inventory.slots.length) {
-                  final slot = inventory.slots[index];
+                if (index < filteredSlots.length) {
+                  final slot = filteredSlots[index];
                   final item = slot.item;
                   final qty = slot.quantity;
 
-                  return GestureDetector(
-                    onTap: () => _showItemDetailsSheet(context, engine, item, qty),
+                  return BounceTap(
+                    onTap: () => ItemDashboardModal.show(
+                      context,
+                      engine,
+                      item,
+                      quantity: qty,
+                      contextType: ItemModalContext.inventory,
+                      quality: slot.quality,
+                      affixIds: slot.affixIds,
+                    ),
                     child: Container(
                       decoration: BoxDecoration(
                         color: const Color(0xFF1E2833),
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: GameTheme.border, width: 1.5),
+                        border: Border.all(
+                          color: GameTheme.getQualityColor(slot.quality),
+                          width: slot.quality != null && slot.quality != QualityTier.standard ? 2.0 : 1.5,
+                        ),
                         boxShadow: [
+                          if (slot.quality == QualityTier.fine)
+                            BoxShadow(
+                              color: Colors.blueAccent.withOpacity(0.2),
+                              blurRadius: 6,
+                              spreadRadius: 1,
+                            ),
+                          if (slot.quality == QualityTier.masterwork)
+                            BoxShadow(
+                              color: GameTheme.accentGold.withOpacity(0.3),
+                              blurRadius: 8,
+                              spreadRadius: 2,
+                            ),
                           BoxShadow(
                             color: Colors.black.withOpacity(0.2),
                             blurRadius: 4,
@@ -1176,21 +1260,6 @@ class _InventoryViewState extends State<InventoryView> with SingleTickerProvider
   }
 
   Widget _buildShopTab(BuildContext context, GameEngine engine, dynamic inventory, int gold) {
-    // Items for sale
-    final buyables = [
-      Items.wildBerries,
-      Items.rawPotato,
-      Items.hotWater,
-      Items.bakedPotato,
-      Items.herbalTea,
-      Items.stoneAxe,
-      Items.ironAxe,
-      Items.stonePickaxe,
-      Items.ironPickaxe,
-      Items.foragingGloves,
-      Items.leatherBackpack,
-    ];
-
     final inTown = engine.currentZone.id == 'town_square';
 
     if (!inTown) {
@@ -1217,6 +1286,8 @@ class _InventoryViewState extends State<InventoryView> with SingleTickerProvider
                 style: ElevatedButton.styleFrom(
                   backgroundColor: GameTheme.accentGold,
                   foregroundColor: Colors.black,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 ),
                 onPressed: () {
                   engine.travelTo(Zones.townSquare);
@@ -1230,103 +1301,623 @@ class _InventoryViewState extends State<InventoryView> with SingleTickerProvider
       );
     }
 
-    return Padding(
-      padding: const EdgeInsets.all(12.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // Gold balance
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: const Color(0xFF222C37),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: GameTheme.border),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Your Balance:',
-                  style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
-                ),
-                Row(
-                  children: [
-                    Text(
-                      '$gold',
-                      style: const TextStyle(
-                        color: GameTheme.accentGold,
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    const Icon(Icons.monetization_on, color: GameTheme.accentGold, size: 16),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-          // Merchant inventory
-          const Text(
-            'BUY TOOLS & SUPPLIES',
-            style: TextStyle(
-              color: GameTheme.accentGold,
-              fontSize: 12,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 1.2,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Expanded(
-            child: ListView.builder(
-              itemCount: buyables.length,
-              itemBuilder: (context, index) {
-                final item = buyables[index];
+    final shopState = engine.shopState;
+    final currentMerchant = shopState.currentMerchant;
+    final listings = shopState.currentListings;
 
-                return Card(
-                  color: GameTheme.cardBg,
-                  margin: const EdgeInsets.only(bottom: 8),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    side: const BorderSide(color: GameTheme.border, width: 1),
-                  ),
-                  child: ListTile(
-                    leading: Text(
-                      item.icon,
-                      style: const TextStyle(fontSize: 28),
-                    ),
-                    title: Text(
-                      item.name,
-                      style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
-                    ),
-                    subtitle: Text(
-                      item.description,
-                      style: const TextStyle(color: GameTheme.textMuted, fontSize: 11),
-                    ),
-                    trailing: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: gold >= item.value ? GameTheme.accentGold : const Color(0xFF2C353F),
-                        foregroundColor: gold >= item.value ? Colors.black : GameTheme.textMuted,
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(6),
+    // Filter listings by category
+    final filteredListings = listings.where((l) {
+      if (_selectedShopCategory == null) return true;
+      return l.category == _selectedShopCategory;
+    }).toList();
+
+    // Find the featured deal of the day
+    ShopListing? featuredDeal;
+    try {
+      featuredDeal = listings.firstWhere((l) => l.isFeatured);
+    } catch (_) {}
+
+    return Stack(
+      children: [
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // 1. MERCHANT SELECTOR TABS
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+              child: Row(
+                children: List.generate(shopState.activeMerchants.length, (index) {
+                  final merchant = shopState.activeMerchants[index];
+                  final isSelected = shopState.activeMerchantIndex == index;
+                  return Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                      child: BounceTap(
+                        onTap: () => engine.setActiveMerchantIndex(index),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+                          decoration: BoxDecoration(
+                            color: isSelected ? GameTheme.cardBg : Colors.transparent,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: isSelected ? GameTheme.accentGold : GameTheme.border.withOpacity(0.5),
+                              width: isSelected ? 1.5 : 1.0,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(merchant.icon, style: const TextStyle(fontSize: 20)),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      merchant.name,
+                                      style: TextStyle(
+                                        color: isSelected ? Colors.white : GameTheme.textMuted,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    Text(
+                                      merchant.title,
+                                      style: TextStyle(
+                                        color: isSelected ? GameTheme.accentGold.withOpacity(0.8) : GameTheme.textMuted,
+                                        fontSize: 9,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
-                      onPressed: gold >= item.value ? () => engine.buyItem(item) : null,
-                      child: Text(
-                        'Buy ${item.value}g',
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
+                    ),
+                  );
+                }),
+              ),
+            ),
+
+            // 2. MERCHANT DIALOG & PROFILE
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Portrait
+                  Container(
+                    width: 54,
+                    height: 54,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: GameTheme.cardBg,
+                      border: Border.all(color: GameTheme.accentGold, width: 1.5),
+                    ),
+                    alignment: Alignment.center,
+                    child: Text(currentMerchant.icon, style: const TextStyle(fontSize: 32)),
+                  ),
+                  const SizedBox(width: 12),
+                  // Chat Bubble
+                  Expanded(
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: GameTheme.cardBg,
+                        borderRadius: const BorderRadius.only(
+                          topRight: Radius.circular(16),
+                          bottomLeft: Radius.circular(16),
+                          bottomRight: Radius.circular(16),
+                        ),
+                        border: Border.all(color: GameTheme.border, width: 1),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '${currentMerchant.name} (${currentMerchant.title})',
+                            style: const TextStyle(color: GameTheme.accentGold, fontSize: 11, fontWeight: FontWeight.bold),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            shopState.currentGreeting,
+                            style: const TextStyle(color: Colors.white, fontSize: 12, height: 1.3),
+                          ),
+                        ],
                       ),
                     ),
                   ),
-                );
-              },
+                ],
+              ),
+            ),
+
+            // 3. DEAL OF THE DAY BANNER
+            if (featuredDeal != null && (_selectedShopCategory == null || _selectedShopCategory == featuredDeal.category)) ...[
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                child: BounceTap(
+                  onTap: () => ItemDashboardModal.show(
+                    context,
+                    engine,
+                    featuredDeal!.item,
+                    contextType: ItemModalContext.shop,
+                  ),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          GameTheme.accentGold.withOpacity(0.2),
+                          const Color(0xFF1E2833),
+                        ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: GameTheme.accentGold, width: 1.5),
+                      boxShadow: [
+                        BoxShadow(
+                          color: GameTheme.accentGold.withOpacity(0.1),
+                          blurRadius: 8,
+                          spreadRadius: 1,
+                        )
+                      ],
+                    ),
+                    padding: const EdgeInsets.all(12),
+                    child: Row(
+                      children: [
+                        const Text('🌟', style: TextStyle(fontSize: 24)),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: Colors.redAccent,
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: Text(
+                                      'LIMITED DEAL -${featuredDeal.discountPercent}%',
+                                      style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                featuredDeal.item.name,
+                                style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+                              ),
+                              Text(
+                                featuredDeal.item.description,
+                                style: const TextStyle(color: GameTheme.textMuted, fontSize: 11),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text(
+                              '${featuredDeal.buyPrice}g',
+                              style: const TextStyle(
+                                color: GameTheme.textMuted,
+                                fontSize: 11,
+                                decoration: TextDecoration.lineThrough,
+                              ),
+                            ),
+                            Text(
+                              '${featuredDeal.effectiveBuyPrice}g',
+                              style: const TextStyle(
+                                color: GameTheme.accentGold,
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+
+            // 4. CATEGORY SELECTOR
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4.0),
+              child: SizedBox(
+                height: 38,
+                child: ListView(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  children: [
+                    _buildCategoryPill(null, 'All'),
+                    _buildCategoryPill(ShopCategory.supplies, 'Supplies'),
+                    _buildCategoryPill(ShopCategory.tools, 'Tools'),
+                    _buildCategoryPill(ShopCategory.weapons, 'Weapons'),
+                    _buildCategoryPill(ShopCategory.armor, 'Armor'),
+                    _buildCategoryPill(ShopCategory.provisions, 'Provisions'),
+                  ],
+                ),
+              ),
+            ),
+
+            // 5. GRID OF ITEMS
+            Expanded(
+              child: filteredListings.isEmpty
+                  ? const Center(
+                      child: Text(
+                        'No items in this category.',
+                        style: TextStyle(color: GameTheme.textMuted, fontStyle: FontStyle.italic),
+                      ),
+                    )
+                  : GridView.builder(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 80),
+                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 2,
+                        crossAxisSpacing: 10,
+                        mainAxisSpacing: 10,
+                        childAspectRatio: 1.35,
+                      ),
+                      itemCount: filteredListings.length,
+                      itemBuilder: (context, index) {
+                        final listing = filteredListings[index];
+                        final item = listing.item;
+                        final price = listing.effectiveBuyPrice;
+                        final isSoldOut = listing.stock != null && listing.stock! <= 0;
+
+                        return BounceTap(
+                          onTap: () => ItemDashboardModal.show(
+                            context,
+                            engine,
+                            item,
+                            contextType: ItemModalContext.shop,
+                          ),
+                          child: Container(
+                            decoration: GameTheme.glassCardDecoration(),
+                            padding: const EdgeInsets.all(8),
+                            child: Stack(
+                              children: [
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                                  children: [
+                                    Expanded(
+                                      child: Row(
+                                        children: [
+                                          Text(item.icon, style: const TextStyle(fontSize: 28)),
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              mainAxisAlignment: MainAxisAlignment.center,
+                                              children: [
+                                                Text(
+                                                  item.name,
+                                                  style: const TextStyle(
+                                                    color: Colors.white,
+                                                    fontSize: 12,
+                                                    fontWeight: FontWeight.bold,
+                                                  ),
+                                                  maxLines: 1,
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
+                                                const SizedBox(height: 2),
+                                                Text(
+                                                  listing.stock == null ? 'Stock: ∞' : (isSoldOut ? 'SOLD OUT' : 'Stock: ${listing.stock}'),
+                                                  style: TextStyle(
+                                                    color: isSoldOut
+                                                        ? Colors.redAccent
+                                                        : (listing.stock != null && listing.stock! <= 2
+                                                            ? Colors.orangeAccent
+                                                            : GameTheme.textMuted),
+                                                    fontSize: 10,
+                                                    fontWeight: FontWeight.bold,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    const Divider(color: GameTheme.border, height: 8),
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            if (listing.discountPercent > 0) ...[
+                                              Text(
+                                                '${listing.buyPrice}g',
+                                                style: const TextStyle(
+                                                  color: GameTheme.textMuted,
+                                                  fontSize: 10,
+                                                  decoration: TextDecoration.lineThrough,
+                                                ),
+                                              ),
+                                              const SizedBox(width: 4),
+                                            ],
+                                            Text(
+                                              '$price g',
+                                              style: const TextStyle(
+                                                color: GameTheme.accentGold,
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const Text('🪙', style: TextStyle(fontSize: 12)),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                                if (listing.discountPercent > 0)
+                                  Positioned(
+                                    top: 0,
+                                    right: 0,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: Colors.redAccent,
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: Text(
+                                        '-${listing.discountPercent}%',
+                                        style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold),
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+
+        // 6. SELL SATSCHEL BUTTON
+        Positioned(
+          left: 16,
+          right: 16,
+          bottom: 12,
+          child: BounceTap(
+            onTap: () => _showSellSatchelBottomSheet(context, engine),
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              decoration: BoxDecoration(
+                color: GameTheme.accentGold,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.3),
+                    blurRadius: 8,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.sell_outlined, color: Colors.black),
+                  SizedBox(width: 8),
+                  Text(
+                    '💰 Open Sell Satchel',
+                    style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 14),
+                  ),
+                ],
+              ),
             ),
           ),
-        ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCategoryPill(ShopCategory? category, String label) {
+    final isSelected = _selectedShopCategory == category;
+    return Padding(
+      padding: const EdgeInsets.only(right: 8.0),
+      child: BounceTap(
+        onTap: () => setState(() => _selectedShopCategory = category),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: isSelected ? GameTheme.accentGold : Colors.transparent,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: isSelected ? GameTheme.accentGold : GameTheme.border,
+              width: 1.0,
+            ),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              color: isSelected ? Colors.black : GameTheme.textLight,
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
       ),
+    );
+  }
+
+  void _showSellSatchelBottomSheet(BuildContext context, GameEngine engine) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: GameTheme.cardBg,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            final localEngine = Provider.of<GameEngine>(context);
+            final slots = localEngine.inventory.slots;
+
+            return SafeArea(
+              child: Container(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(context).size.height * 0.7,
+                ),
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          '💰 SELL SATCHEL (0.5x Value)',
+                          style: TextStyle(color: GameTheme.accentGold, fontSize: 16, fontWeight: FontWeight.bold),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close, color: GameTheme.textMuted),
+                          onPressed: () => Navigator.pop(context),
+                        ),
+                      ],
+                    ),
+                    const Divider(color: GameTheme.border, height: 16),
+
+                    Expanded(
+                      child: slots.isEmpty
+                          ? const Center(
+                              child: Text(
+                                'Your satchel is empty!',
+                                style: TextStyle(color: GameTheme.textMuted, fontStyle: FontStyle.italic),
+                              ),
+                            )
+                          : ListView.builder(
+                              itemCount: slots.length,
+                              itemBuilder: (context, index) {
+                                final slot = slots[index];
+                                final item = slot.item;
+                                final qty = slot.quantity;
+                                final sellPrice = max(1, (item.value * 0.5).toInt());
+
+                                bool isEquipped = false;
+                                if (item.isTool && item.toolSkill != null) {
+                                  isEquipped = localEngine.equippedTools[item.toolSkill!]?.id == item.id;
+                                } else if (item.isWeapon) {
+                                  isEquipped = localEngine.equippedWeapon?.id == item.id;
+                                } else if (item.isArmor) {
+                                  isEquipped = localEngine.equippedArmor?.id == item.id;
+                                }
+
+                                return Card(
+                                  color: const Color(0xFF1E2833),
+                                  margin: const EdgeInsets.only(bottom: 8),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                    side: const BorderSide(color: GameTheme.border, width: 1),
+                                  ),
+                                  child: ListTile(
+                                    leading: Text(item.icon, style: const TextStyle(fontSize: 24)),
+                                    title: Text(
+                                      item.name,
+                                      style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                                    ),
+                                    subtitle: Text(
+                                      isEquipped ? 'EQUIPPED • Cannot Sell' : 'Qty: $qty • Value: $sellPrice g',
+                                      style: TextStyle(
+                                        color: isEquipped ? Colors.redAccent : GameTheme.textMuted,
+                                        fontSize: 11,
+                                        fontWeight: isEquipped ? FontWeight.bold : FontWeight.normal,
+                                      ),
+                                    ),
+                                    trailing: isEquipped
+                                        ? null
+                                        : Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              OutlinedButton(
+                                                style: OutlinedButton.styleFrom(
+                                                  foregroundColor: GameTheme.accentGold,
+                                                  side: const BorderSide(color: GameTheme.accentGold, width: 1),
+                                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                  minimumSize: Size.zero,
+                                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                                ),
+                                                onPressed: () {
+                                                  final RenderBox? box = context.findRenderObject() as RenderBox?;
+                                                  Offset sourceOffset = Offset(MediaQuery.of(context).size.width / 2, MediaQuery.of(context).size.height * 0.5);
+                                                  if (box != null) {
+                                                    sourceOffset = box.localToGlobal(Offset.zero) + Offset(box.size.width / 2, box.size.height / 2);
+                                                  }
+
+                                                  final targetOffset = Offset(MediaQuery.of(context).size.width * 0.8, 50);
+                                                  final overlayState = Overlay.of(context);
+
+                                                  localEngine.sellItem(item, 1);
+
+                                                  CoinBurstOverlay.show(
+                                                    overlayState: overlayState,
+                                                    source: sourceOffset,
+                                                    target: targetOffset,
+                                                    isBuy: false,
+                                                  );
+                                                },
+                                                child: const Text('Sell 1', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+                                              ),
+                                              const SizedBox(width: 6),
+                                              ElevatedButton(
+                                                style: ElevatedButton.styleFrom(
+                                                  backgroundColor: GameTheme.healthRed.withOpacity(0.15),
+                                                  foregroundColor: Colors.white,
+                                                  side: const BorderSide(color: GameTheme.healthRed, width: 1),
+                                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                  minimumSize: Size.zero,
+                                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                                ),
+                                                onPressed: () {
+                                                  final RenderBox? box = context.findRenderObject() as RenderBox?;
+                                                  Offset sourceOffset = Offset(MediaQuery.of(context).size.width / 2, MediaQuery.of(context).size.height * 0.5);
+                                                  if (box != null) {
+                                                    sourceOffset = box.localToGlobal(Offset.zero) + Offset(box.size.width / 2, box.size.height / 2);
+                                                  }
+                                                  final targetOffset = Offset(MediaQuery.of(context).size.width * 0.8, 50);
+                                                  final overlayState = Overlay.of(context);
+
+                                                  localEngine.sellItem(item, qty);
+
+                                                  CoinBurstOverlay.show(
+                                                    overlayState: overlayState,
+                                                    source: sourceOffset,
+                                                    target: targetOffset,
+                                                    isBuy: false,
+                                                  );
+                                                },
+                                                child: const Text('All', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+                                              ),
+                                            ],
+                                          ),
+                                  ),
+                                );
+                              },
+                            ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 
@@ -1406,11 +1997,11 @@ class _InventoryViewState extends State<InventoryView> with SingleTickerProvider
                 const SizedBox(height: 12),
                 
                 // Stat Rows
-                _buildStatSheetRow(context, engine, SkillType.woodcutting, equippedTools[SkillType.woodcutting]),
+                _buildStatSheetRow(context, engine, SkillType.woodcutting, engine.equippedToolSlots[SkillType.woodcutting]),
                 const SizedBox(height: 10),
-                _buildStatSheetRow(context, engine, SkillType.mining, equippedTools[SkillType.mining]),
+                _buildStatSheetRow(context, engine, SkillType.mining, engine.equippedToolSlots[SkillType.mining]),
                 const SizedBox(height: 10),
-                _buildStatSheetRow(context, engine, SkillType.herbalism, equippedTools[SkillType.herbalism]),
+                _buildStatSheetRow(context, engine, SkillType.herbalism, engine.equippedToolSlots[SkillType.herbalism]),
                 const SizedBox(height: 12),
                 const Divider(color: GameTheme.border, height: 1),
                 const SizedBox(height: 12),
@@ -1429,7 +2020,11 @@ class _InventoryViewState extends State<InventoryView> with SingleTickerProvider
                               style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
                             ),
                             Text(
-                              engine.equippedWeapon != null ? engine.equippedWeapon!.name : 'Unarmed',
+                              engine.equippedWeaponSlot != null 
+                                  ? (engine.equippedWeaponSlot!.quality != null && engine.equippedWeaponSlot!.quality != QualityTier.standard
+                                      ? "${engine.equippedWeaponSlot!.quality!.name.toUpperCase()} ${engine.equippedWeapon!.name}"
+                                      : engine.equippedWeapon!.name)
+                                  : 'Unarmed',
                               style: const TextStyle(color: GameTheme.textMuted, fontSize: 11),
                             ),
                           ],
@@ -1458,7 +2053,11 @@ class _InventoryViewState extends State<InventoryView> with SingleTickerProvider
                               style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
                             ),
                             Text(
-                              engine.equippedArmor != null ? engine.equippedArmor!.name : 'No Armor',
+                              engine.equippedArmorSlot != null 
+                                  ? (engine.equippedArmorSlot!.quality != null && engine.equippedArmorSlot!.quality != QualityTier.standard
+                                      ? "${engine.equippedArmorSlot!.quality!.name.toUpperCase()} ${engine.equippedArmor!.name}"
+                                      : engine.equippedArmor!.name)
+                                  : 'No Armor',
                               style: const TextStyle(color: GameTheme.textMuted, fontSize: 11),
                             ),
                           ],
@@ -1524,10 +2123,16 @@ class _InventoryViewState extends State<InventoryView> with SingleTickerProvider
     );
   }
 
-  Widget _buildStatSheetRow(BuildContext context, GameEngine engine, SkillType skill, Item? tool) {
+  Widget _buildStatSheetRow(BuildContext context, GameEngine engine, SkillType skill, InventorySlot? toolSlot) {
     final skillColor = GameTheme.getSkillColor(skill);
     final speedBonus = (engine.getSkillSpeedBonus(skill) * 100).toInt();
     final successBonus = (engine.getSkillSuccessBonus(skill) * 100).toInt();
+
+    final String displayName = toolSlot != null 
+        ? (toolSlot.quality != null && toolSlot.quality != QualityTier.standard
+            ? "${toolSlot.quality!.name.toUpperCase()} ${toolSlot.item.name}"
+            : toolSlot.item.name)
+        : 'No tool equipped';
 
     return Row(
       children: [
@@ -1546,9 +2151,9 @@ class _InventoryViewState extends State<InventoryView> with SingleTickerProvider
                 ),
               ),
               Text(
-                tool != null ? tool.name : 'No tool equipped',
+                displayName,
                 style: TextStyle(
-                  color: tool != null ? skillColor : GameTheme.textMuted,
+                  color: toolSlot != null ? skillColor : GameTheme.textMuted,
                   fontSize: 11,
                 ),
               ),
@@ -1581,21 +2186,44 @@ class _InventoryViewState extends State<InventoryView> with SingleTickerProvider
   }
 
   Widget _buildToolSlotCard(BuildContext context, GameEngine engine, SkillType skill) {
-    final tool = engine.equippedTools[skill];
+    final toolSlot = engine.equippedToolSlots[skill];
 
-    if (tool == null) {
+    if (toolSlot == null) {
       return _buildEmptySlotCard(context, skill);
     }
 
-    return Card(
-      color: const Color(0xFF1E2833),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: GameTheme.getSkillColor(skill).withOpacity(0.5), width: 1.5),
+    final tool = toolSlot.item;
+    final quality = toolSlot.quality;
+    final affixIds = toolSlot.affixIds;
+
+    final String displayName = quality != null && quality != QualityTier.standard
+        ? "${quality.name.toUpperCase()} ${tool.name}"
+        : tool.name;
+
+    final double displaySpeed = engine.getItemSpeedBonus(tool, quality, affixIds);
+    final double displaySuccess = engine.getItemSuccessBonus(tool, quality, affixIds);
+
+    return BounceTap(
+      onTap: () => ItemDashboardModal.show(
+        context,
+        engine,
+        tool,
+        contextType: ItemModalContext.equipment,
+        quality: quality,
+        affixIds: affixIds,
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(12.0),
-        child: Row(
+      child: Card(
+        color: const Color(0xFF1E2833),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(
+            color: GameTheme.getQualityColor(quality),
+            width: quality != null && quality != QualityTier.standard ? 2.0 : 1.5,
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(12.0),
+          child: Row(
           children: [
             Text(
               tool.icon,
@@ -1607,7 +2235,7 @@ class _InventoryViewState extends State<InventoryView> with SingleTickerProvider
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    tool.name,
+                    displayName,
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 14,
@@ -1619,16 +2247,23 @@ class _InventoryViewState extends State<InventoryView> with SingleTickerProvider
                     '${skill.name} Tool',
                     style: TextStyle(color: GameTheme.getSkillColor(skill), fontSize: 11, fontWeight: FontWeight.bold),
                   ),
+                  if (affixIds.isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      affixIds.map((a) => Affixes.findById(a)?.name ?? a).join(', '),
+                      style: const TextStyle(color: Colors.amberAccent, fontSize: 11, fontStyle: FontStyle.italic),
+                    ),
+                  ],
                   const SizedBox(height: 4),
                   Row(
                     children: [
                       Text(
-                        '🏎️ +${(tool.speedBonus * 100).toInt()}% Spd',
+                        '🏎️ +${(displaySpeed * 100).toInt()}% Spd',
                         style: const TextStyle(color: Colors.greenAccent, fontSize: 11),
                       ),
                       const SizedBox(width: 12),
                       Text(
-                        '🎯 +${(tool.successBonus * 100).toInt()}% Suc',
+                        '🎯 +${(displaySuccess * 100).toInt()}% Suc',
                         style: const TextStyle(color: Colors.blueAccent, fontSize: 11),
                       ),
                     ],
@@ -1656,8 +2291,9 @@ class _InventoryViewState extends State<InventoryView> with SingleTickerProvider
           ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildEmptySlotCard(BuildContext context, SkillType skill) {
     return Container(
@@ -1704,9 +2340,9 @@ class _InventoryViewState extends State<InventoryView> with SingleTickerProvider
   }
 
   Widget _buildWeaponSlotCard(BuildContext context, GameEngine engine) {
-    final weapon = engine.equippedWeapon;
+    final weaponSlot = engine.equippedWeaponSlot;
 
-    if (weapon == null) {
+    if (weaponSlot == null) {
       return Container(
         padding: const EdgeInsets.all(16.0),
         decoration: BoxDecoration(
@@ -1749,73 +2385,103 @@ class _InventoryViewState extends State<InventoryView> with SingleTickerProvider
       );
     }
 
-    return Card(
-      color: const Color(0xFF1E2833),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: GameTheme.getSkillColor(SkillType.combat).withOpacity(0.5), width: 1.5),
+    final weapon = weaponSlot.item;
+    final quality = weaponSlot.quality;
+    final affixIds = weaponSlot.affixIds;
+
+    final String displayName = quality != null && quality != QualityTier.standard
+        ? "${quality.name.toUpperCase()} ${weapon.name}"
+        : weapon.name;
+
+    final double displayAttack = engine.getItemAttackPower(weapon, quality, affixIds);
+
+    return BounceTap(
+      onTap: () => ItemDashboardModal.show(
+        context,
+        engine,
+        weapon,
+        contextType: ItemModalContext.equipment,
+        quality: quality,
+        affixIds: affixIds,
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(12.0),
-        child: Row(
-          children: [
-            Text(
-              weapon.icon,
-              style: const TextStyle(fontSize: 32),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    weapon.name,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  const Text(
-                    'Weapon',
-                    style: TextStyle(color: Colors.redAccent, fontSize: 11, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '⚔️ +${weapon.attackPower} Attack Power',
-                    style: const TextStyle(color: Colors.redAccent, fontSize: 11),
-                  ),
-                ],
+      child: Card(
+        color: const Color(0xFF1E2833),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(
+            color: GameTheme.getQualityColor(quality),
+            width: quality != null && quality != QualityTier.standard ? 2.0 : 1.5,
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(12.0),
+          child: Row(
+            children: [
+              Text(
+                weapon.icon,
+                style: const TextStyle(fontSize: 32),
               ),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: GameTheme.healthRed,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(6),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      displayName,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    const Text(
+                      'Weapon',
+                      style: TextStyle(color: Colors.redAccent, fontSize: 11, fontWeight: FontWeight.bold),
+                    ),
+                    if (affixIds.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        affixIds.map((a) => Affixes.findById(a)?.name ?? a).join(', '),
+                        style: const TextStyle(color: Colors.amberAccent, fontSize: 11, fontStyle: FontStyle.italic),
+                      ),
+                    ],
+                    const SizedBox(height: 4),
+                    Text(
+                      '⚔️ +${displayAttack.toInt()} Attack Power',
+                      style: const TextStyle(color: Colors.redAccent, fontSize: 11),
+                    ),
+                  ],
                 ),
               ),
-              onPressed: () {
-                engine.unequipWeapon();
-              },
-              child: const Text(
-                'Unequip',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: GameTheme.healthRed,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                ),
+                onPressed: () {
+                  engine.unequipWeapon();
+                },
+                child: const Text(
+                  'Unequip',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
 
   Widget _buildArmorSlotCard(BuildContext context, GameEngine engine) {
-    final armor = engine.equippedArmor;
+    final armorSlot = engine.equippedArmorSlot;
 
-    if (armor == null) {
+    if (armorSlot == null) {
       return Container(
         padding: const EdgeInsets.all(16.0),
         decoration: BoxDecoration(
@@ -1858,64 +2524,94 @@ class _InventoryViewState extends State<InventoryView> with SingleTickerProvider
       );
     }
 
-    return Card(
-      color: const Color(0xFF1E2833),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: GameTheme.getSkillColor(SkillType.combat).withOpacity(0.5), width: 1.5),
+    final armor = armorSlot.item;
+    final quality = armorSlot.quality;
+    final affixIds = armorSlot.affixIds;
+
+    final String displayName = quality != null && quality != QualityTier.standard
+        ? "${quality.name.toUpperCase()} ${armor.name}"
+        : armor.name;
+
+    final double displayDefense = engine.getItemDefense(armor, quality, affixIds);
+
+    return BounceTap(
+      onTap: () => ItemDashboardModal.show(
+        context,
+        engine,
+        armor,
+        contextType: ItemModalContext.equipment,
+        quality: quality,
+        affixIds: affixIds,
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(12.0),
-        child: Row(
-          children: [
-            Text(
-              armor.icon,
-              style: const TextStyle(fontSize: 32),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    armor.name,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  const Text(
-                    'Armor',
-                    style: TextStyle(color: Colors.blueAccent, fontSize: 11, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '🛡️ +${armor.defense} Defense',
-                    style: const TextStyle(color: Colors.blueAccent, fontSize: 11),
-                  ),
-                ],
+      child: Card(
+        color: const Color(0xFF1E2833),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(
+            color: GameTheme.getQualityColor(quality),
+            width: quality != null && quality != QualityTier.standard ? 2.0 : 1.5,
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(12.0),
+          child: Row(
+            children: [
+              Text(
+                armor.icon,
+                style: const TextStyle(fontSize: 32),
               ),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: GameTheme.healthRed,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(6),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      displayName,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    const Text(
+                      'Armor',
+                      style: TextStyle(color: Colors.blueAccent, fontSize: 11, fontWeight: FontWeight.bold),
+                    ),
+                    if (affixIds.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        affixIds.map((a) => Affixes.findById(a)?.name ?? a).join(', '),
+                        style: const TextStyle(color: Colors.amberAccent, fontSize: 11, fontStyle: FontStyle.italic),
+                      ),
+                    ],
+                    const SizedBox(height: 4),
+                    Text(
+                      '🛡️ +${displayDefense.toInt()} Defense',
+                      style: const TextStyle(color: Colors.blueAccent, fontSize: 11),
+                    ),
+                  ],
                 ),
               ),
-              onPressed: () {
-                engine.unequipArmor();
-              },
-              child: const Text(
-                'Unequip',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: GameTheme.healthRed,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                ),
+                onPressed: () {
+                  engine.unequipArmor();
+                },
+                child: const Text(
+                  'Unequip',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

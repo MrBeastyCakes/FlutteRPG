@@ -37,6 +37,16 @@ class GameTheme {
     return textMuted;
   }
 
+  static Color getQualityColor(dynamic quality) {
+    if (quality == null) return border;
+    final name = quality.toString().toLowerCase();
+    if (name.contains('crude')) return const Color(0xFF90A4AE); // Grey
+    if (name.contains('standard')) return Colors.white70;       // White
+    if (name.contains('fine')) return const Color(0xFF29B6F6);   // Blue
+    if (name.contains('masterwork')) return accentGold;          // Gold
+    return border;
+  }
+
   // Theme definition
   static ThemeData get themeData {
     return ThemeData(

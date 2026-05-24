@@ -6,9 +6,12 @@ import 'theme/game_theme.dart';
 import 'views/dashboard_view.dart';
 import 'views/skills_view.dart';
 import 'views/inventory_view.dart';
-import 'views/zones_view.dart';
 import 'views/build_view.dart';
 import 'models/item.dart';
+import 'widgets/floating_notification.dart';
+
+import 'views/codex_view.dart';
+import 'widgets/world_event_widgets.dart';
 
 void main() {
   runApp(
@@ -28,7 +31,12 @@ class MyApp extends StatelessWidget {
       title: 'Elaria RPG',
       debugShowCheckedModeBanner: false,
       theme: GameTheme.themeData,
-      home: const MainGameShell(),
+      home: const WorldEventListener(
+        child: MainGameShell(),
+      ),
+      routes: {
+        '/codex': (context) => const CodexView(),
+      },
     );
   }
 }
@@ -47,7 +55,6 @@ class _MainGameShellState extends State<MainGameShell> {
     DashboardView(),
     SkillsView(),
     InventoryView(),
-    ZonesView(),
     BuildView(),
   ];
 
@@ -55,13 +62,33 @@ class _MainGameShellState extends State<MainGameShell> {
   Widget build(BuildContext context) {
     final engine = Provider.of<GameEngine>(context);
     final activeMasterwork = engine.activeMasterwork;
+    final int currentIndex = engine.activeTabIndex;
 
     // Build the app body. Swap to Masterwork Scenario Screen if active.
     Widget appBody;
     if (activeMasterwork != null) {
       appBody = _buildMasterworkScenarioView(engine, activeMasterwork);
     } else {
-      appBody = _views[_currentIndex];
+      appBody = AnimatedSwitcher(
+        duration: const Duration(milliseconds: 250),
+        switchInCurve: Curves.easeOutCubic,
+        switchOutCurve: Curves.easeInCubic,
+        transitionBuilder: (Widget child, Animation<double> animation) {
+          return FadeTransition(
+            opacity: animation,
+            child: ScaleTransition(
+              scale: Tween<double>(begin: 0.97, end: 1.0).animate(
+                CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
+              ),
+              child: child,
+            ),
+          );
+        },
+        child: KeyedSubtree(
+          key: ValueKey<int>(currentIndex),
+          child: _views[currentIndex],
+        ),
+      );
     }
 
     return Scaffold(
@@ -152,15 +179,20 @@ class _MainGameShellState extends State<MainGameShell> {
           ),
         ],
       ),
-      body: SafeArea(child: appBody),
+      body: SafeArea(
+        child: Stack(
+          children: [
+            appBody,
+            FloatingNotificationOverlay(notifications: engine.notifications),
+          ],
+        ),
+      ),
       bottomNavigationBar: activeMasterwork != null
           ? null // Hide navigation bar during a trial to focus user attention
           : BottomNavigationBar(
-              currentIndex: _currentIndex,
+              currentIndex: currentIndex,
               onTap: (index) {
-                setState(() {
-                  _currentIndex = index;
-                });
+                engine.setActiveTabIndex(index);
               },
               items: const [
                 BottomNavigationBarItem(
@@ -176,12 +208,8 @@ class _MainGameShellState extends State<MainGameShell> {
                   label: 'Inventory',
                 ),
                 BottomNavigationBarItem(
-                  icon: Icon(Icons.map),
-                  label: 'Travel',
-                ),
-                BottomNavigationBarItem(
                   icon: Icon(Icons.construction),
-                  label: 'Build',
+                  label: 'Workshop',
                 ),
               ],
             ),

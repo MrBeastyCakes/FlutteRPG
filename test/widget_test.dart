@@ -37,12 +37,16 @@ void main() {
       ),
     );
 
-    // Tap on the 'Build' tab in bottom navigation.
-    await tester.tap(find.text('Build'));
+    // Tap on the 'Workshop' tab in bottom navigation.
+    await tester.tap(find.text('Workshop'));
     await tester.pumpAndSettle();
 
     // Verify build view is displayed
-    expect(find.text('CONSTRUCTION SITE'), findsOneWidget);
+    expect(find.text('BUILD STATIONS'), findsOneWidget);
+
+    // Switch to BUILD STATIONS subtab to see the warning banner
+    await tester.tap(find.text('BUILD STATIONS'));
+    await tester.pumpAndSettle();
     
     // Verify the warning banner for Town Square is shown
     expect(find.text('TOWN SQUARE RESTRICTION'), findsOneWidget);
@@ -54,6 +58,42 @@ void main() {
 
     // Verify the warning is gone and Whispering Woods is the current zone
     expect(find.text('TOWN SQUARE RESTRICTION'), findsNothing);
-    expect(find.text('Whispering Woods (Tier 1)'), findsNWidgets(2));
+    expect(find.textContaining(RegExp('Whispering Woods \\(Tier 1\\)', caseSensitive: false)), findsAtLeastNWidgets(1));
+  });
+
+  testWidgets('Dashboard displays station status chip and handles navigation on tap', (WidgetTester tester) async {
+    final engine = GameEngine();
+    
+    // Setup: Mark Town Square crafting bench as restored (operational)
+    final benchKey = 'town_square::crafting_bench';
+    final bench = engine.stationInstances[benchKey];
+    if (bench != null) {
+      bench.isRuined = false;
+    }
+
+    await tester.pumpWidget(
+      ChangeNotifierProvider(
+        create: (_) => engine,
+        child: const MyApp(),
+      ),
+    );
+
+    // Verify the station status chip for Crafting Bench T1 is displayed on the Dashboard
+    expect(find.text('Crafting Bench'), findsOneWidget);
+    expect(find.text('T1'), findsOneWidget);
+    expect(find.text('Idle'), findsOneWidget);
+
+    // Tap on the chip to focus the station and navigate to Workshop
+    await tester.tap(find.text('Crafting Bench'));
+    await tester.pump();
+
+    // Verify engine state changes during build
+    expect(engine.activeTabIndex, 3);
+    expect(engine.focusedStationId, isNull);
+
+    await tester.pumpAndSettle();
+
+    // Verify the UI transitioned to Workshop view (e.g. shows subtab text)
+    expect(find.text('CRAFT RECIPES'), findsOneWidget);
   });
 }

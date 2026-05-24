@@ -6,7 +6,9 @@ enum ItemType {
   tool,
   weapon,
   armor,
+  blueprint,
 }
+
 
 class Item {
   final String id;
@@ -49,6 +51,7 @@ class Item {
   bool get isTool => type == ItemType.tool;
   bool get isWeapon => type == ItemType.weapon;
   bool get isArmor => type == ItemType.armor;
+  bool get isBlueprint => type == ItemType.blueprint;
 
   @override
   bool operator ==(Object other) =>
@@ -58,6 +61,27 @@ class Item {
   @override
   int get hashCode => id.hashCode;
 }
+
+class BlueprintItem extends Item {
+  final String recipeId;
+
+  const BlueprintItem({
+    required String id,
+    required String name,
+    required String description,
+    required String icon,
+    required int value,
+    required this.recipeId,
+  }) : super(
+          id: id,
+          name: name,
+          description: description,
+          icon: icon,
+          type: ItemType.blueprint,
+          value: value,
+        );
+}
+
 
 /// A registry of all items in the game
 class Items {
@@ -589,6 +613,146 @@ class Items {
     value: 45,
   );
 
+  static const Item copperIngot = Item(
+    id: 'copper_ingot',
+    name: 'Copper Ingot',
+    description: 'Smelted copper ore.',
+    icon: '🪙',
+    type: ItemType.resource,
+    value: 20,
+  );
+
+  static const Item tinIngot = Item(
+    id: 'tin_ingot',
+    name: 'Tin Ingot',
+    description: 'Smelted tin ore.',
+    icon: '🪙',
+    type: ItemType.resource,
+    value: 25,
+  );
+
+  static const Item bronzeIngot = Item(
+    id: 'bronze_ingot',
+    name: 'Bronze Ingot',
+    description: 'A strong bronze alloy smelted from copper and tin.',
+    icon: '🪙',
+    type: ItemType.resource,
+    value: 50,
+  );
+
+  static const Item ironIngot = Item(
+    id: 'iron_ingot',
+    name: 'Iron Ingot',
+    description: 'Smelted iron ore.',
+    icon: '🪙',
+    type: ItemType.resource,
+    value: 40,
+  );
+
+  static const Item steelIngot = Item(
+    id: 'steel_ingot',
+    name: 'Steel Ingot',
+    description: 'Refined steel alloy.',
+    icon: '🪙',
+    type: ItemType.resource,
+    value: 80,
+  );
+
+  static const Item curedLeather = Item(
+    id: 'cured_leather',
+    name: 'Cured Leather',
+    description: 'Tanned and cured beast hide.',
+    icon: '💼',
+    type: ItemType.resource,
+    value: 30,
+  );
+
+  static const Item treatedSilk = Item(
+    id: 'treated_silk',
+    name: 'Treated Silk',
+    description: 'Woven silk treated with oils.',
+    icon: '🧵',
+    type: ItemType.resource,
+    value: 45,
+  );
+
+  static const Item greaterSteelGreatsword = Item(
+    id: 'greater_steel_greatsword',
+    name: 'Greater Steel Greatsword',
+    description: 'A massive blade forged of refined steel and troll claws.',
+    icon: '⚔️',
+    type: ItemType.weapon,
+    value: 650,
+    attackPower: 38,
+  );
+
+  static const Item elixirOfLife4 = Item(
+    id: 'elixir_4',
+    name: "Alchemist's Elixir IV",
+    description: 'A supreme elixir that restores immense health and energy.',
+    icon: '🧪',
+    type: ItemType.food,
+    value: 200,
+    healAmount: 120,
+    energyAmount: 120,
+  );
+
+  static const Item glyphMastery = Item(
+    id: 'glyph_mastery',
+    name: 'Glyph of Mastery',
+    description: 'A legendary runic glyph containing pure mastery.',
+    icon: '🪨',
+    type: ItemType.food,
+    value: 300,
+    healAmount: 50,
+    energyAmount: 50,
+  );
+
+  static const BlueprintItem blueprintSteelGreatsword = BlueprintItem(
+    id: 'blueprint_steel_greatsword',
+    name: 'Blueprint: Steel Greatsword',
+    description: 'A scroll detailing how to forge a Steel Greatsword.',
+    icon: '📜',
+    value: 100,
+    recipeId: 'steel_greatsword',
+  );
+
+  static const BlueprintItem blueprintGreaterSteelGreatsword = BlueprintItem(
+    id: 'blueprint_greater_steel_greatsword',
+    name: 'Blueprint: Greater Steel Greatsword',
+    description: 'A scroll detailing how to forge a Greater Steel Greatsword.',
+    icon: '📜',
+    value: 250,
+    recipeId: 'greater_steel_greatsword',
+  );
+
+  static const BlueprintItem blueprintElixir4 = BlueprintItem(
+    id: 'blueprint_elixir_4',
+    name: "Blueprint: Alchemist's Elixir IV",
+    description: "A scroll detailing how to brew Alchemist's Elixir IV.",
+    icon: '📜',
+    value: 200,
+    recipeId: 'elixir_4',
+  );
+
+  static const BlueprintItem blueprintGlyphMastery = BlueprintItem(
+    id: 'blueprint_glyph_mastery',
+    name: 'Blueprint: Glyph of Mastery',
+    description: 'A scroll detailing how to carve the Glyph of Mastery.',
+    icon: '📜',
+    value: 200,
+    recipeId: 'glyph_mastery',
+  );
+
+  static const BlueprintItem blueprintSteelPlate = BlueprintItem(
+    id: 'blueprint_steel_plate',
+    name: 'Blueprint: Steel Cuirass',
+    description: 'A scroll detailing how to forge a Steel Cuirass.',
+    icon: '📜',
+    value: 120,
+    recipeId: 'steel_plate',
+  );
+
   static const List<Item> all = [
     oakLog,
     willowLog,
@@ -640,6 +804,21 @@ class Items {
     spiderFang,
     wolfPelt,
     trollClaw,
+    copperIngot,
+    tinIngot,
+    bronzeIngot,
+    ironIngot,
+    steelIngot,
+    curedLeather,
+    treatedSilk,
+    greaterSteelGreatsword,
+    elixirOfLife4,
+    glyphMastery,
+    blueprintSteelGreatsword,
+    blueprintGreaterSteelGreatsword,
+    blueprintElixir4,
+    blueprintGlyphMastery,
+    blueprintSteelPlate,
   ];
 
   static Item? findById(String id) {

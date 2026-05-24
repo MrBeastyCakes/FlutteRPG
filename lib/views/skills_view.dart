@@ -7,8 +7,25 @@ import '../models/masterwork.dart';
 import '../theme/game_theme.dart';
 import '../widgets/custom_progress_bar.dart';
 
-class SkillsView extends StatelessWidget {
+class SkillsView extends StatefulWidget {
   const SkillsView({Key? key}) : super(key: key);
+
+  @override
+  State<SkillsView> createState() => _SkillsViewState();
+}
+
+class _SkillsViewState extends State<SkillsView> {
+  final Set<SkillType> _expandedSkills = {};
+
+  void _toggleExpanded(SkillType type) {
+    setState(() {
+      if (_expandedSkills.contains(type)) {
+        _expandedSkills.remove(type);
+      } else {
+        _expandedSkills.add(type);
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -23,7 +40,8 @@ class SkillsView extends StatelessWidget {
         final skillColor = GameTheme.getSkillColor(skill.type);
         final nextLevelXpStart = SkillState.totalXpForLevel(skill.level + 1);
         final xpRemaining = nextLevelXpStart - skill.xp;
-        
+        final isExpanded = _expandedSkills.contains(skill.type);
+
         // Find if there's an available Masterwork task for this gated skill
         final masterworkTask = skill.isGated 
             ? MasterworkTasks.findForSkill(skill.type, skill.levelCap)
@@ -31,7 +49,7 @@ class SkillsView extends StatelessWidget {
 
         return Card(
           color: GameTheme.cardBg,
-          margin: const EdgeInsets.only(bottom: 12),
+          margin: const EdgeInsets.only(bottom: 10),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
             side: BorderSide(
@@ -40,193 +58,210 @@ class SkillsView extends StatelessWidget {
             ),
           ),
           elevation: 2,
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // Skill Title Header
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
+          child: InkWell(
+            borderRadius: BorderRadius.circular(12),
+            onTap: () => _toggleExpanded(skill.type),
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Skill Title Header
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          Text(
+                            skill.type.icon,
+                            style: const TextStyle(fontSize: 22),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            skill.type.name,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: skill.isGated ? GameTheme.healthRed.withOpacity(0.15) : const Color(0xFF222C37),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: skill.isGated ? GameTheme.healthRed : GameTheme.border,
+                                width: 1,
+                              ),
+                            ),
+                            child: Text(
+                              'Lvl ${skill.level}',
+                              style: TextStyle(
+                                color: skill.isGated ? GameTheme.healthRed : GameTheme.accentGold,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Icon(
+                            isExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+                            color: GameTheme.textMuted,
+                            size: 20,
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+
+                  // Progress Bar (Always visible)
+                  CustomProgressBar(
+                    progress: skill.progress,
+                    color: skill.isGated ? GameTheme.healthRed : skillColor,
+                    height: 10,
+                  ),
+
+                  // Expanded Section
+                  if (isExpanded) ...[
+                    const SizedBox(height: 10),
+                    // XP stats
                     Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          skill.type.icon,
-                          style: const TextStyle(fontSize: 22),
+                          'Total XP: ${skill.xp.toInt()}',
+                          style: const TextStyle(color: GameTheme.textMuted, fontSize: 11),
                         ),
-                        const SizedBox(width: 8),
                         Text(
-                          skill.type.name,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
+                          skill.isGated
+                              ? '🔒 Cap: Lvl ${skill.levelCap} reached'
+                              : 'Next Level: ${xpRemaining.toInt()} XP needed',
+                          style: TextStyle(
+                            color: skill.isGated ? GameTheme.healthRed : GameTheme.textMuted,
+                            fontSize: 11,
+                            fontWeight: skill.isGated ? FontWeight.bold : FontWeight.normal,
                           ),
                         ),
                       ],
                     ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: skill.isGated ? GameTheme.healthRed.withOpacity(0.15) : const Color(0xFF222C37),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: skill.isGated ? GameTheme.healthRed : GameTheme.border,
-                          width: 1,
-                        ),
-                      ),
-                      child: Text(
-                        'Lvl ${skill.level}',
-                        style: TextStyle(
-                          color: skill.isGated ? GameTheme.healthRed : GameTheme.accentGold,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
 
-                // Progress Bar
-                CustomProgressBar(
-                  progress: skill.progress,
-                  color: skill.isGated ? GameTheme.healthRed : skillColor,
-                  height: 12,
-                ),
-                const SizedBox(height: 6),
+                    const SizedBox(height: 10),
+                    const Divider(color: GameTheme.border, height: 1),
+                    const SizedBox(height: 8),
 
-                // XP stats
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      'Total XP: ${skill.xp.toInt()}',
-                      style: const TextStyle(color: GameTheme.textMuted, fontSize: 12),
-                    ),
-                    Text(
-                      skill.isGated
-                          ? '🔒 Cap: Lvl ${skill.levelCap} reached'
-                          : 'Next Level: ${xpRemaining.toInt()} XP needed',
+                    // Active Skill Bonuses Panel
+                    const Text(
+                      '⚡ ACTIVE BONUSES',
                       style: TextStyle(
-                        color: skill.isGated ? GameTheme.healthRed : GameTheme.textMuted,
-                        fontSize: 12,
-                        fontWeight: skill.isGated ? FontWeight.bold : FontWeight.normal,
+                        color: GameTheme.accentGold,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1.0,
                       ),
                     ),
-                  ],
-                ),
-
-                const SizedBox(height: 12),
-                const Divider(color: GameTheme.border, height: 1),
-                const SizedBox(height: 8),
-
-                // Active Skill Bonuses Panel
-                const Text(
-                  '⚡ ACTIVE BONUSES',
-                  style: TextStyle(
-                    color: GameTheme.accentGold,
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 1.0,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                _buildActiveBonuses(engine, skill),
-                const SizedBox(height: 12),
-                
-                // Masterwork Perks Panel
-                const Text(
-                  '🏆 MASTERWORK PERKS',
-                  style: TextStyle(
-                    color: GameTheme.accentGold,
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 1.0,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                _buildPerkRow(skill, 10),
-                const SizedBox(height: 6),
-                _buildPerkRow(skill, 20),
-
-                // Masterwork challenge trigger section
-                if (skill.isGated) ...[
-                  const SizedBox(height: 12),
-                  const Divider(color: GameTheme.border, height: 1),
-                  const SizedBox(height: 10),
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: GameTheme.healthRed.withOpacity(0.08),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: GameTheme.healthRed.withOpacity(0.3)),
+                    const SizedBox(height: 6),
+                    _buildActiveBonuses(engine, skill),
+                    const SizedBox(height: 12),
+                    
+                    // Masterwork Perks Panel
+                    const Text(
+                      '🏆 MASTERWORK PERKS',
+                      style: TextStyle(
+                        color: GameTheme.accentGold,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1.0,
+                      ),
                     ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        const Row(
+                    const SizedBox(height: 6),
+                    _buildPerkRow(skill, 10),
+                    const SizedBox(height: 6),
+                    _buildPerkRow(skill, 20),
+
+                    // Masterwork challenge trigger section
+                    if (skill.isGated) ...[
+                      const SizedBox(height: 12),
+                      const Divider(color: GameTheme.border, height: 1),
+                      const SizedBox(height: 10),
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: GameTheme.healthRed.withOpacity(0.08),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: GameTheme.healthRed.withOpacity(0.3)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            Icon(Icons.warning_amber_rounded, color: GameTheme.healthRed, size: 16),
-                            SizedBox(width: 6),
+                            const Row(
+                              children: [
+                                Icon(Icons.warning_amber_rounded, color: GameTheme.healthRed, size: 16),
+                                SizedBox(width: 6),
+                                Text(
+                                  'LEVEL LIMIT GATED',
+                                  style: TextStyle(
+                                    color: GameTheme.healthRed,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    letterSpacing: 1.0,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 4),
                             Text(
-                              'LEVEL LIMIT GATED',
-                              style: TextStyle(
-                                color: GameTheme.healthRed,
-                                fontSize: 11,
-                                fontWeight: FontWeight.bold,
-                                letterSpacing: 1.0,
+                              masterworkTask != null
+                                  ? 'You must complete the trial "${masterworkTask.title}" to continue progressing to level ${skill.levelCap + 10}.'
+                                  : 'Complete the Masterwork Challenge for this skill to unlock further progression.',
+                              style: const TextStyle(color: GameTheme.textLight, fontSize: 12),
+                            ),
+                            const SizedBox(height: 10),
+                            ElevatedButton.icon(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: GameTheme.healthRed,
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                padding: const EdgeInsets.symmetric(vertical: 10),
+                              ),
+                              onPressed: masterworkTask != null
+                                  ? () {
+                                      engine.startMasterworkChallenge(masterworkTask);
+                                      // Auto navigate or show visual feedback
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          backgroundColor: GameTheme.cardBg,
+                                          content: Text(
+                                            'Trial "${masterworkTask.title}" started! Go to the Dashboard to begin.',
+                                            style: const TextStyle(color: Colors.white),
+                                          ),
+                                          duration: const Duration(seconds: 3),
+                                        ),
+                                      );
+                                    }
+                                  : null,
+                              icon: const Icon(Icons.psychology, size: 16),
+                              label: Text(
+                                masterworkTask != null 
+                                    ? 'Start: ${masterworkTask.title}'
+                                    : 'Trial Details Locked',
+                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
                               ),
                             ),
                           ],
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          masterworkTask != null
-                              ? 'You must complete the trial "${masterworkTask.title}" to continue progressing to level ${skill.levelCap + 10}.'
-                              : 'Complete the Masterwork Challenge for this skill to unlock further progression.',
-                          style: const TextStyle(color: GameTheme.textLight, fontSize: 12),
-                        ),
-                        const SizedBox(height: 10),
-                        ElevatedButton.icon(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: GameTheme.healthRed,
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            padding: const EdgeInsets.symmetric(vertical: 10),
-                          ),
-                          onPressed: masterworkTask != null
-                              ? () {
-                                  engine.startMasterworkChallenge(masterworkTask);
-                                  // Auto navigate or show visual feedback
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      backgroundColor: GameTheme.cardBg,
-                                      content: Text(
-                                        'Trial "${masterworkTask.title}" started! Go to the Dashboard to begin.',
-                                        style: const TextStyle(color: Colors.white),
-                                      ),
-                                      duration: const Duration(seconds: 3),
-                                    ),
-                                  );
-                                }
-                              : null,
-                          icon: const Icon(Icons.psychology, size: 16),
-                          label: Text(
-                            masterworkTask != null 
-                                ? 'Start: ${masterworkTask.title}'
-                                : 'Trial Details Locked',
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+                      ),
+                    ],
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
         );
@@ -345,6 +380,7 @@ class SkillsView extends StatelessWidget {
     
     return Container(
       padding: const EdgeInsets.all(8),
+      margin: const EdgeInsets.only(bottom: 6),
       decoration: BoxDecoration(
         color: isUnlocked ? GameTheme.accentGold.withOpacity(0.04) : Colors.black.withOpacity(0.15),
         borderRadius: BorderRadius.circular(8),

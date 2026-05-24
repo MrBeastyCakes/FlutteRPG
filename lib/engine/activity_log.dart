@@ -4,6 +4,7 @@ enum LogType {
   warning,
   error,
   levelUp,
+  worldEvent,
 }
 
 class LogEntry {

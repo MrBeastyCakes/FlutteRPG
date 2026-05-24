@@ -1,6 +1,28 @@
 import 'skill.dart';
 import 'item.dart';
 
+class SlotChoice {
+  final String itemId;
+  final double qualityBias; // e.g. +0.03 for willow_log; -0.10 for below-canonical
+
+  const SlotChoice({
+    required this.itemId,
+    required this.qualityBias,
+  });
+}
+
+class RecipeSlot {
+  final int quantity;
+  final List<SlotChoice> acceptedItems; // ordered list; index 0 = canonical (+0 bias)
+
+  const RecipeSlot({
+    required this.quantity,
+    required this.acceptedItems,
+  });
+}
+
+enum RecipeRarity { common, rare, legendary }
+
 class Recipe {
   final String id;
   final String name;
@@ -11,7 +33,11 @@ class Recipe {
   final SkillType requiredSkill;
   final int requiredLevel;
   final double xpReward;
-  final Map<String, int> inputs; // itemId -> quantity
+  final List<RecipeSlot> slots;
+  final RecipeSlot? modifierSlot;
+  final String stationId;
+  final int requiredStationTier;
+  final RecipeRarity rarity;
   final int energyCost;
   final int durationSeconds;
 
@@ -25,16 +51,46 @@ class Recipe {
     required this.requiredSkill,
     required this.requiredLevel,
     required this.xpReward,
-    required this.inputs,
+    required this.slots,
+    this.modifierSlot,
+    required this.stationId,
+    this.requiredStationTier = 1,
+    this.rarity = RecipeRarity.common,
     required this.energyCost,
     required this.durationSeconds,
   });
 
   Item? get resultItem => Items.findById(resultItemId);
+
+  // Expose a helper map for backward compatibility
+  Map<String, int> get inputs {
+    final result = <String, int>{};
+    for (final slot in slots) {
+      if (slot.acceptedItems.isNotEmpty) {
+        result[slot.acceptedItems.first.itemId] = slot.quantity;
+      }
+    }
+    return result;
+  }
 }
 
 class Recipes {
-  // Basic Tools
+  // Shared default modifier slot allowing common materials as boosters
+  static const RecipeSlot defaultModifier = RecipeSlot(
+    quantity: 1,
+    acceptedItems: [
+      SlotChoice(itemId: 'wildflower', qualityBias: 0.0),
+      SlotChoice(itemId: 'nightshade', qualityBias: 0.0),
+      SlotChoice(itemId: 'river_clay', qualityBias: 0.0),
+      SlotChoice(itemId: 'wild_berries', qualityBias: 0.0),
+      SlotChoice(itemId: 'troll_claw', qualityBias: 0.0),
+      SlotChoice(itemId: 'boar_tusk', qualityBias: 0.0),
+    ],
+  );
+
+  // ==========================================
+  // 1. BASIC TOOLS (Bench T1)
+  // ==========================================
   static const Recipe stoneAxe = Recipe(
     id: 'stone_axe',
     name: 'Stone Axe',
@@ -45,7 +101,24 @@ class Recipes {
     requiredSkill: SkillType.crafting,
     requiredLevel: 1,
     xpReward: 15.0,
-    inputs: {'oak_log': 3, 'river_clay': 2},
+    slots: [
+      RecipeSlot(
+        quantity: 3,
+        acceptedItems: [
+          SlotChoice(itemId: 'oak_log', qualityBias: 0.0),
+          SlotChoice(itemId: 'willow_log', qualityBias: 0.03),
+        ],
+      ),
+      RecipeSlot(
+        quantity: 2,
+        acceptedItems: [
+          SlotChoice(itemId: 'river_clay', qualityBias: 0.0),
+        ],
+      ),
+    ],
+    modifierSlot: defaultModifier,
+    stationId: 'crafting_bench',
+    requiredStationTier: 1,
     energyCost: 3,
     durationSeconds: 3,
   );
@@ -60,7 +133,24 @@ class Recipes {
     requiredSkill: SkillType.crafting,
     requiredLevel: 1,
     xpReward: 15.0,
-    inputs: {'oak_log': 3, 'river_clay': 2},
+    slots: [
+      RecipeSlot(
+        quantity: 3,
+        acceptedItems: [
+          SlotChoice(itemId: 'oak_log', qualityBias: 0.0),
+          SlotChoice(itemId: 'willow_log', qualityBias: 0.03),
+        ],
+      ),
+      RecipeSlot(
+        quantity: 2,
+        acceptedItems: [
+          SlotChoice(itemId: 'river_clay', qualityBias: 0.0),
+        ],
+      ),
+    ],
+    modifierSlot: defaultModifier,
+    stationId: 'crafting_bench',
+    requiredStationTier: 1,
     energyCost: 3,
     durationSeconds: 3,
   );
@@ -75,23 +165,64 @@ class Recipes {
     requiredSkill: SkillType.crafting,
     requiredLevel: 1,
     xpReward: 15.0,
-    inputs: {'wildflower': 3, 'river_clay': 2},
+    slots: [
+      RecipeSlot(
+        quantity: 3,
+        acceptedItems: [
+          SlotChoice(itemId: 'wildflower', qualityBias: 0.0),
+        ],
+      ),
+      RecipeSlot(
+        quantity: 2,
+        acceptedItems: [
+          SlotChoice(itemId: 'river_clay', qualityBias: 0.0),
+        ],
+      ),
+    ],
+    modifierSlot: defaultModifier,
+    stationId: 'crafting_bench',
+    requiredStationTier: 1,
     energyCost: 3,
     durationSeconds: 3,
   );
 
-  // Woodcutting Tools
+  // ==========================================
+  // 2. TOOL UPGRADES (Bench T1 / T2 / T3)
+  // ==========================================
   static const Recipe copperAxe = Recipe(
     id: 'copper_axe',
     name: 'Copper Axe',
     icon: '🪓',
-    description: 'Upgrade your Stone Axe with copper ore.',
+    description: 'Upgrade your Stone Axe with copper ingots.',
     resultItemId: 'copper_axe',
     resultQuantity: 1,
     requiredSkill: SkillType.crafting,
     requiredLevel: 5,
     xpReward: 30.0,
-    inputs: {'stone_axe': 1, 'copper_ore': 5, 'oak_log': 5},
+    slots: [
+      RecipeSlot(
+        quantity: 1,
+        acceptedItems: [
+          SlotChoice(itemId: 'stone_axe', qualityBias: 0.0),
+        ],
+      ),
+      RecipeSlot(
+        quantity: 2,
+        acceptedItems: [
+          SlotChoice(itemId: 'copper_ingot', qualityBias: 0.0),
+        ],
+      ),
+      RecipeSlot(
+        quantity: 3,
+        acceptedItems: [
+          SlotChoice(itemId: 'oak_log', qualityBias: 0.0),
+          SlotChoice(itemId: 'willow_log', qualityBias: 0.04),
+        ],
+      ),
+    ],
+    modifierSlot: defaultModifier,
+    stationId: 'crafting_bench',
+    requiredStationTier: 1,
     energyCost: 6,
     durationSeconds: 4,
   );
@@ -100,13 +231,36 @@ class Recipes {
     id: 'bronze_axe',
     name: 'Bronze Axe',
     icon: '🪓',
-    description: 'Upgrade your Copper Axe with copper and tin ore.',
+    description: 'Upgrade your Copper Axe with bronze ingots.',
     resultItemId: 'bronze_axe',
     resultQuantity: 1,
     requiredSkill: SkillType.crafting,
     requiredLevel: 8,
     xpReward: 40.0,
-    inputs: {'copper_axe': 1, 'tin_ore': 5, 'oak_log': 5},
+    slots: [
+      RecipeSlot(
+        quantity: 1,
+        acceptedItems: [
+          SlotChoice(itemId: 'copper_axe', qualityBias: 0.0),
+        ],
+      ),
+      RecipeSlot(
+        quantity: 2,
+        acceptedItems: [
+          SlotChoice(itemId: 'bronze_ingot', qualityBias: 0.0),
+        ],
+      ),
+      RecipeSlot(
+        quantity: 3,
+        acceptedItems: [
+          SlotChoice(itemId: 'oak_log', qualityBias: 0.0),
+          SlotChoice(itemId: 'willow_log', qualityBias: 0.04),
+        ],
+      ),
+    ],
+    modifierSlot: defaultModifier,
+    stationId: 'crafting_bench',
+    requiredStationTier: 2,
     energyCost: 8,
     durationSeconds: 5,
   );
@@ -115,29 +269,74 @@ class Recipes {
     id: 'iron_axe',
     name: 'Iron Axe',
     icon: '🪓',
-    description: 'Upgrade your Bronze Axe with iron ore and willow logs.',
+    description: 'Upgrade your Bronze Axe with iron ingots and willow logs.',
     resultItemId: 'iron_axe',
     resultQuantity: 1,
     requiredSkill: SkillType.crafting,
     requiredLevel: 12,
     xpReward: 50.0,
-    inputs: {'bronze_axe': 1, 'iron_ore': 5, 'willow_log': 5},
+    slots: [
+      RecipeSlot(
+        quantity: 1,
+        acceptedItems: [
+          SlotChoice(itemId: 'bronze_axe', qualityBias: 0.0),
+        ],
+      ),
+      RecipeSlot(
+        quantity: 3,
+        acceptedItems: [
+          SlotChoice(itemId: 'iron_ingot', qualityBias: 0.0),
+        ],
+      ),
+      RecipeSlot(
+        quantity: 3,
+        acceptedItems: [
+          SlotChoice(itemId: 'willow_log', qualityBias: 0.0),
+          SlotChoice(itemId: 'oak_log', qualityBias: -0.05),
+        ],
+      ),
+    ],
+    modifierSlot: defaultModifier,
+    stationId: 'crafting_bench',
+    requiredStationTier: 2,
     energyCost: 10,
     durationSeconds: 6,
   );
 
-  // Mining Tools
   static const Recipe copperPickaxe = Recipe(
     id: 'copper_pickaxe',
     name: 'Copper Pickaxe',
     icon: '⛏️',
-    description: 'Upgrade your Stone Pickaxe with copper ore.',
+    description: 'Upgrade your Stone Pickaxe with copper ingots.',
     resultItemId: 'copper_pickaxe',
     resultQuantity: 1,
     requiredSkill: SkillType.crafting,
     requiredLevel: 5,
     xpReward: 30.0,
-    inputs: {'stone_pickaxe': 1, 'copper_ore': 5, 'oak_log': 5},
+    slots: [
+      RecipeSlot(
+        quantity: 1,
+        acceptedItems: [
+          SlotChoice(itemId: 'stone_pickaxe', qualityBias: 0.0),
+        ],
+      ),
+      RecipeSlot(
+        quantity: 2,
+        acceptedItems: [
+          SlotChoice(itemId: 'copper_ingot', qualityBias: 0.0),
+        ],
+      ),
+      RecipeSlot(
+        quantity: 3,
+        acceptedItems: [
+          SlotChoice(itemId: 'oak_log', qualityBias: 0.0),
+          SlotChoice(itemId: 'willow_log', qualityBias: 0.04),
+        ],
+      ),
+    ],
+    modifierSlot: defaultModifier,
+    stationId: 'crafting_bench',
+    requiredStationTier: 1,
     energyCost: 6,
     durationSeconds: 4,
   );
@@ -146,13 +345,36 @@ class Recipes {
     id: 'bronze_pickaxe',
     name: 'Bronze Pickaxe',
     icon: '⛏️',
-    description: 'Upgrade your Copper Pickaxe with copper and tin ore.',
+    description: 'Upgrade your Copper Pickaxe with bronze ingots.',
     resultItemId: 'bronze_pickaxe',
     resultQuantity: 1,
     requiredSkill: SkillType.crafting,
     requiredLevel: 8,
     xpReward: 40.0,
-    inputs: {'copper_pickaxe': 1, 'tin_ore': 5, 'oak_log': 5},
+    slots: [
+      RecipeSlot(
+        quantity: 1,
+        acceptedItems: [
+          SlotChoice(itemId: 'copper_pickaxe', qualityBias: 0.0),
+        ],
+      ),
+      RecipeSlot(
+        quantity: 2,
+        acceptedItems: [
+          SlotChoice(itemId: 'bronze_ingot', qualityBias: 0.0),
+        ],
+      ),
+      RecipeSlot(
+        quantity: 3,
+        acceptedItems: [
+          SlotChoice(itemId: 'oak_log', qualityBias: 0.0),
+          SlotChoice(itemId: 'willow_log', qualityBias: 0.04),
+        ],
+      ),
+    ],
+    modifierSlot: defaultModifier,
+    stationId: 'crafting_bench',
+    requiredStationTier: 2,
     energyCost: 8,
     durationSeconds: 5,
   );
@@ -161,29 +383,74 @@ class Recipes {
     id: 'iron_pickaxe',
     name: 'Iron Pickaxe',
     icon: '⛏️',
-    description: 'Upgrade your Bronze Pickaxe with iron ore and willow logs.',
+    description: 'Upgrade your Bronze Pickaxe with iron ingots and willow logs.',
     resultItemId: 'iron_pickaxe',
     resultQuantity: 1,
     requiredSkill: SkillType.crafting,
     requiredLevel: 12,
     xpReward: 50.0,
-    inputs: {'bronze_pickaxe': 1, 'iron_ore': 5, 'willow_log': 5},
+    slots: [
+      RecipeSlot(
+        quantity: 1,
+        acceptedItems: [
+          SlotChoice(itemId: 'bronze_pickaxe', qualityBias: 0.0),
+        ],
+      ),
+      RecipeSlot(
+        quantity: 3,
+        acceptedItems: [
+          SlotChoice(itemId: 'iron_ingot', qualityBias: 0.0),
+        ],
+      ),
+      RecipeSlot(
+        quantity: 3,
+        acceptedItems: [
+          SlotChoice(itemId: 'willow_log', qualityBias: 0.0),
+          SlotChoice(itemId: 'oak_log', qualityBias: -0.05),
+        ],
+      ),
+    ],
+    modifierSlot: defaultModifier,
+    stationId: 'crafting_bench',
+    requiredStationTier: 2,
     energyCost: 10,
     durationSeconds: 6,
   );
 
-  // Foraging Gloves
   static const Recipe reinforcedGloves = Recipe(
     id: 'reinforced_gloves',
     name: 'Reinforced Gloves',
     icon: '🧤',
-    description: 'Upgrade your Foraging Gloves with clay and wildflowers.',
+    description: 'Upgrade your Foraging Gloves with cured leather and clay.',
     resultItemId: 'reinforced_gloves',
     resultQuantity: 1,
     requiredSkill: SkillType.crafting,
     requiredLevel: 7,
     xpReward: 35.0,
-    inputs: {'foraging_gloves': 1, 'river_clay': 5, 'wildflower': 3},
+    slots: [
+      RecipeSlot(
+        quantity: 1,
+        acceptedItems: [
+          SlotChoice(itemId: 'foraging_gloves', qualityBias: 0.0),
+        ],
+      ),
+      RecipeSlot(
+        quantity: 2,
+        acceptedItems: [
+          SlotChoice(itemId: 'cured_leather', qualityBias: 0.0),
+        ],
+      ),
+      RecipeSlot(
+        quantity: 3,
+        acceptedItems: [
+          SlotChoice(itemId: 'river_clay', qualityBias: 0.0),
+        ],
+      ),
+    ],
+    modifierSlot: defaultModifier,
+    stationId: 'crafting_bench',
+    requiredStationTier: 2,
+    rarity: RecipeRarity.rare,
     energyCost: 8,
     durationSeconds: 5,
   );
@@ -192,18 +459,43 @@ class Recipes {
     id: 'masterwork_gloves',
     name: 'Masterwork Gloves',
     icon: '🧤',
-    description: 'Upgrade your Reinforced Gloves with nightshade and willow.',
+    description: 'Upgrade your Reinforced Gloves with treated silk and nightshade.',
     resultItemId: 'masterwork_gloves',
     resultQuantity: 1,
     requiredSkill: SkillType.crafting,
     requiredLevel: 12,
     xpReward: 60.0,
-    inputs: {'reinforced_gloves': 1, 'nightshade': 3, 'willow_log': 5},
+    slots: [
+      RecipeSlot(
+        quantity: 1,
+        acceptedItems: [
+          SlotChoice(itemId: 'reinforced_gloves', qualityBias: 0.0),
+        ],
+      ),
+      RecipeSlot(
+        quantity: 2,
+        acceptedItems: [
+          SlotChoice(itemId: 'treated_silk', qualityBias: 0.0),
+        ],
+      ),
+      RecipeSlot(
+        quantity: 3,
+        acceptedItems: [
+          SlotChoice(itemId: 'nightshade', qualityBias: 0.0),
+        ],
+      ),
+    ],
+    modifierSlot: defaultModifier,
+    stationId: 'crafting_bench',
+    requiredStationTier: 3,
+    rarity: RecipeRarity.rare,
     energyCost: 12,
     durationSeconds: 6,
   );
 
-  // Cooking (Potatoes)
+  // ==========================================
+  // 3. COOKING (Kitchen T1 / T2)
+  // ==========================================
   static const Recipe bakedPotato = Recipe(
     id: 'baked_potato',
     name: 'Baked Potato',
@@ -214,7 +506,24 @@ class Recipes {
     requiredSkill: SkillType.cooking,
     requiredLevel: 1,
     xpReward: 20.0,
-    inputs: {'raw_potato': 1, 'oak_log': 1},
+    slots: [
+      RecipeSlot(
+        quantity: 1,
+        acceptedItems: [
+          SlotChoice(itemId: 'raw_potato', qualityBias: 0.0),
+        ],
+      ),
+      RecipeSlot(
+        quantity: 1,
+        acceptedItems: [
+          SlotChoice(itemId: 'oak_log', qualityBias: 0.0),
+          SlotChoice(itemId: 'willow_log', qualityBias: 0.05),
+        ],
+      ),
+    ],
+    modifierSlot: defaultModifier,
+    stationId: 'field_kitchen',
+    requiredStationTier: 1,
     energyCost: 2,
     durationSeconds: 3,
   );
@@ -229,7 +538,23 @@ class Recipes {
     requiredSkill: SkillType.cooking,
     requiredLevel: 6,
     xpReward: 22.0,
-    inputs: {'baked_potato': 1, 'wildflower': 2},
+    slots: [
+      RecipeSlot(
+        quantity: 1,
+        acceptedItems: [
+          SlotChoice(itemId: 'baked_potato', qualityBias: 0.0),
+        ],
+      ),
+      RecipeSlot(
+        quantity: 2,
+        acceptedItems: [
+          SlotChoice(itemId: 'wildflower', qualityBias: 0.0),
+        ],
+      ),
+    ],
+    modifierSlot: defaultModifier,
+    stationId: 'field_kitchen',
+    requiredStationTier: 1,
     energyCost: 2,
     durationSeconds: 3,
   );
@@ -238,18 +563,40 @@ class Recipes {
     id: 'loaded_potato',
     name: 'Loaded Potato',
     icon: '🥔',
-    description: 'Upgrade buttered potato with cooked trout bacon.',
+    description: 'Upgrade buttered potato with cooked trout and boar meat.',
     resultItemId: 'loaded_potato',
     resultQuantity: 1,
     requiredSkill: SkillType.cooking,
     requiredLevel: 10,
     xpReward: 30.0,
-    inputs: {'buttered_potato': 1, 'cooked_fish': 1},
+    slots: [
+      RecipeSlot(
+        quantity: 1,
+        acceptedItems: [
+          SlotChoice(itemId: 'buttered_potato', qualityBias: 0.0),
+        ],
+      ),
+      RecipeSlot(
+        quantity: 1,
+        acceptedItems: [
+          SlotChoice(itemId: 'cooked_fish', qualityBias: 0.0),
+        ],
+      ),
+      RecipeSlot(
+        quantity: 1,
+        acceptedItems: [
+          SlotChoice(itemId: 'boar_meat', qualityBias: 0.0),
+        ],
+      ),
+    ],
+    modifierSlot: defaultModifier,
+    stationId: 'field_kitchen',
+    requiredStationTier: 2,
+    rarity: RecipeRarity.rare,
     energyCost: 3,
     durationSeconds: 4,
   );
 
-  // Cooking (Trout)
   static const Recipe cookedTrout = Recipe(
     id: 'cooked_trout',
     name: 'Cooked Trout',
@@ -260,7 +607,24 @@ class Recipes {
     requiredSkill: SkillType.cooking,
     requiredLevel: 1,
     xpReward: 22.0,
-    inputs: {'raw_trout': 1, 'oak_log': 1},
+    slots: [
+      RecipeSlot(
+        quantity: 1,
+        acceptedItems: [
+          SlotChoice(itemId: 'raw_trout', qualityBias: 0.0),
+        ],
+      ),
+      RecipeSlot(
+        quantity: 1,
+        acceptedItems: [
+          SlotChoice(itemId: 'oak_log', qualityBias: 0.0),
+          SlotChoice(itemId: 'willow_log', qualityBias: 0.05),
+        ],
+      ),
+    ],
+    modifierSlot: defaultModifier,
+    stationId: 'field_kitchen',
+    requiredStationTier: 1,
     energyCost: 3,
     durationSeconds: 4,
   );
@@ -275,12 +639,28 @@ class Recipes {
     requiredSkill: SkillType.cooking,
     requiredLevel: 6,
     xpReward: 28.0,
-    inputs: {'cooked_fish': 1, 'willow_log': 2},
+    slots: [
+      RecipeSlot(
+        quantity: 1,
+        acceptedItems: [
+          SlotChoice(itemId: 'cooked_fish', qualityBias: 0.0),
+        ],
+      ),
+      RecipeSlot(
+        quantity: 2,
+        acceptedItems: [
+          SlotChoice(itemId: 'willow_log', qualityBias: 0.0),
+          SlotChoice(itemId: 'oak_log', qualityBias: -0.04),
+        ],
+      ),
+    ],
+    modifierSlot: defaultModifier,
+    stationId: 'field_kitchen',
+    requiredStationTier: 1,
     energyCost: 3,
     durationSeconds: 4,
   );
 
-  // Cooking (Tea)
   static const Recipe herbalTea = Recipe(
     id: 'herbal_tea',
     name: 'Herbal Tea',
@@ -291,7 +671,23 @@ class Recipes {
     requiredSkill: SkillType.cooking,
     requiredLevel: 8,
     xpReward: 25.0,
-    inputs: {'wildflower': 2, 'hot_water': 1},
+    slots: [
+      RecipeSlot(
+        quantity: 2,
+        acceptedItems: [
+          SlotChoice(itemId: 'wildflower', qualityBias: 0.0),
+        ],
+      ),
+      RecipeSlot(
+        quantity: 1,
+        acceptedItems: [
+          SlotChoice(itemId: 'hot_water', qualityBias: 0.0),
+        ],
+      ),
+    ],
+    modifierSlot: defaultModifier,
+    stationId: 'field_kitchen',
+    requiredStationTier: 1,
     energyCost: 2,
     durationSeconds: 3,
   );
@@ -306,12 +702,31 @@ class Recipes {
     requiredSkill: SkillType.cooking,
     requiredLevel: 10,
     xpReward: 35.0,
-    inputs: {'herbal_tea': 1, 'nightshade': 1},
+    slots: [
+      RecipeSlot(
+        quantity: 1,
+        acceptedItems: [
+          SlotChoice(itemId: 'herbal_tea', qualityBias: 0.0),
+        ],
+      ),
+      RecipeSlot(
+        quantity: 1,
+        acceptedItems: [
+          SlotChoice(itemId: 'nightshade', qualityBias: 0.0),
+        ],
+      ),
+    ],
+    modifierSlot: defaultModifier,
+    stationId: 'field_kitchen',
+    requiredStationTier: 2,
+    rarity: RecipeRarity.rare,
     energyCost: 3,
     durationSeconds: 3,
   );
 
-  // Herbalism Potions
+  // ==========================================
+  // 4. HERBALISM POTIONS (Kitchen T1 / Apothecary)
+  // ==========================================
   static const Recipe elixirOfLife1 = Recipe(
     id: 'elixir_1',
     name: 'Elixir of Life I',
@@ -322,7 +737,23 @@ class Recipes {
     requiredSkill: SkillType.herbalism,
     requiredLevel: 3,
     xpReward: 20.0,
-    inputs: {'wildflower': 3, 'wild_berries': 2},
+    slots: [
+      RecipeSlot(
+        quantity: 3,
+        acceptedItems: [
+          SlotChoice(itemId: 'wildflower', qualityBias: 0.0),
+        ],
+      ),
+      RecipeSlot(
+        quantity: 2,
+        acceptedItems: [
+          SlotChoice(itemId: 'wild_berries', qualityBias: 0.0),
+        ],
+      ),
+    ],
+    modifierSlot: defaultModifier,
+    stationId: 'field_kitchen',
+    requiredStationTier: 1,
     energyCost: 4,
     durationSeconds: 4,
   );
@@ -337,7 +768,29 @@ class Recipes {
     requiredSkill: SkillType.herbalism,
     requiredLevel: 7,
     xpReward: 30.0,
-    inputs: {'elixir_1': 1, 'wildflower': 3, 'river_clay': 2},
+    slots: [
+      RecipeSlot(
+        quantity: 1,
+        acceptedItems: [
+          SlotChoice(itemId: 'elixir_1', qualityBias: 0.0),
+        ],
+      ),
+      RecipeSlot(
+        quantity: 3,
+        acceptedItems: [
+          SlotChoice(itemId: 'wildflower', qualityBias: 0.0),
+        ],
+      ),
+      RecipeSlot(
+        quantity: 2,
+        acceptedItems: [
+          SlotChoice(itemId: 'river_clay', qualityBias: 0.0),
+        ],
+      ),
+    ],
+    modifierSlot: defaultModifier,
+    stationId: 'apothecary',
+    requiredStationTier: 1,
     energyCost: 6,
     durationSeconds: 5,
   );
@@ -352,7 +805,23 @@ class Recipes {
     requiredSkill: SkillType.herbalism,
     requiredLevel: 12,
     xpReward: 45.0,
-    inputs: {'elixir_2': 1, 'nightshade': 2},
+    slots: [
+      RecipeSlot(
+        quantity: 1,
+        acceptedItems: [
+          SlotChoice(itemId: 'elixir_2', qualityBias: 0.0),
+        ],
+      ),
+      RecipeSlot(
+        quantity: 2,
+        acceptedItems: [
+          SlotChoice(itemId: 'nightshade', qualityBias: 0.0),
+        ],
+      ),
+    ],
+    modifierSlot: defaultModifier,
+    stationId: 'apothecary',
+    requiredStationTier: 2,
     energyCost: 8,
     durationSeconds: 6,
   );
@@ -367,12 +836,30 @@ class Recipes {
     requiredSkill: SkillType.herbalism,
     requiredLevel: 10,
     xpReward: 35.0,
-    inputs: {'nightshade': 2, 'wild_berries': 3},
+    slots: [
+      RecipeSlot(
+        quantity: 2,
+        acceptedItems: [
+          SlotChoice(itemId: 'nightshade', qualityBias: 0.0),
+        ],
+      ),
+      RecipeSlot(
+        quantity: 3,
+        acceptedItems: [
+          SlotChoice(itemId: 'wild_berries', qualityBias: 0.0),
+        ],
+      ),
+    ],
+    modifierSlot: defaultModifier,
+    stationId: 'apothecary',
+    requiredStationTier: 2,
     energyCost: 5,
     durationSeconds: 4,
   );
 
-  // Lore Glyphs
+  // ==========================================
+  // 5. LORE GLYPHS (Bench T1 / T2 / T3)
+  // ==========================================
   static const Recipe glyphSwiftness = Recipe(
     id: 'glyph_swiftness',
     name: 'Glyph of Swiftness',
@@ -383,7 +870,23 @@ class Recipes {
     requiredSkill: SkillType.lore,
     requiredLevel: 5,
     xpReward: 25.0,
-    inputs: {'river_clay': 2, 'wildflower': 2},
+    slots: [
+      RecipeSlot(
+        quantity: 2,
+        acceptedItems: [
+          SlotChoice(itemId: 'river_clay', qualityBias: 0.0),
+        ],
+      ),
+      RecipeSlot(
+        quantity: 2,
+        acceptedItems: [
+          SlotChoice(itemId: 'wildflower', qualityBias: 0.0),
+        ],
+      ),
+    ],
+    modifierSlot: defaultModifier,
+    stationId: 'crafting_bench',
+    requiredStationTier: 1,
     energyCost: 5,
     durationSeconds: 4,
   );
@@ -398,23 +901,58 @@ class Recipes {
     requiredSkill: SkillType.lore,
     requiredLevel: 10,
     xpReward: 35.0,
-    inputs: {'river_clay': 3, 'nightshade': 1},
+    slots: [
+      RecipeSlot(
+        quantity: 3,
+        acceptedItems: [
+          SlotChoice(itemId: 'river_clay', qualityBias: 0.0),
+        ],
+      ),
+      RecipeSlot(
+        quantity: 1,
+        acceptedItems: [
+          SlotChoice(itemId: 'nightshade', qualityBias: 0.0),
+        ],
+      ),
+    ],
+    modifierSlot: defaultModifier,
+    stationId: 'crafting_bench',
+    requiredStationTier: 2,
     energyCost: 6,
     durationSeconds: 5,
   );
 
-  // Weapons
+  // ==========================================
+  // 6. WEAPONS & ARMOR (Bench T1 / T2 / T3)
+  // ==========================================
   static const Recipe bronzeSword = Recipe(
     id: 'bronze_sword',
     name: 'Bronze Sword',
     icon: '⚔️',
-    description: 'Forge a sharp bronze sword from copper and tin.',
+    description: 'Forge a sharp bronze sword from bronze ingots.',
     resultItemId: 'bronze_sword',
     resultQuantity: 1,
     requiredSkill: SkillType.crafting,
     requiredLevel: 3,
     xpReward: 35.0,
-    inputs: {'copper_ore': 5, 'tin_ore': 3, 'oak_log': 2},
+    slots: [
+      RecipeSlot(
+        quantity: 3,
+        acceptedItems: [
+          SlotChoice(itemId: 'bronze_ingot', qualityBias: 0.0),
+        ],
+      ),
+      RecipeSlot(
+        quantity: 2,
+        acceptedItems: [
+          SlotChoice(itemId: 'oak_log', qualityBias: 0.0),
+          SlotChoice(itemId: 'willow_log', qualityBias: 0.04),
+        ],
+      ),
+    ],
+    modifierSlot: defaultModifier,
+    stationId: 'crafting_bench',
+    requiredStationTier: 1,
     energyCost: 6,
     durationSeconds: 4,
   );
@@ -423,13 +961,30 @@ class Recipes {
     id: 'iron_sword',
     name: 'Iron Sword',
     icon: '⚔️',
-    description: 'Forge a heavy iron sword.',
+    description: 'Forge a heavy iron sword from iron ingots.',
     resultItemId: 'iron_sword',
     resultQuantity: 1,
     requiredSkill: SkillType.crafting,
     requiredLevel: 7,
     xpReward: 60.0,
-    inputs: {'iron_ore': 6, 'willow_log': 3, 'river_clay': 1},
+    slots: [
+      RecipeSlot(
+        quantity: 3,
+        acceptedItems: [
+          SlotChoice(itemId: 'iron_ingot', qualityBias: 0.0),
+        ],
+      ),
+      RecipeSlot(
+        quantity: 2,
+        acceptedItems: [
+          SlotChoice(itemId: 'willow_log', qualityBias: 0.0),
+          SlotChoice(itemId: 'oak_log', qualityBias: -0.05),
+        ],
+      ),
+    ],
+    modifierSlot: defaultModifier,
+    stationId: 'crafting_bench',
+    requiredStationTier: 2,
     energyCost: 8,
     durationSeconds: 5,
   );
@@ -438,29 +993,67 @@ class Recipes {
     id: 'steel_greatsword',
     name: 'Steel Greatsword',
     icon: '⚔️',
-    description: 'Forge a legendary greatsword.',
+    description: 'Forge a legendary steel greatsword from steel ingots.',
     resultItemId: 'steel_greatsword',
     resultQuantity: 1,
     requiredSkill: SkillType.crafting,
     requiredLevel: 15,
     xpReward: 120.0,
-    inputs: {'iron_ore': 12, 'willow_log': 4, 'river_clay': 3, 'troll_claw': 1},
+    slots: [
+      RecipeSlot(
+        quantity: 4,
+        acceptedItems: [
+          SlotChoice(itemId: 'steel_ingot', qualityBias: 0.0),
+        ],
+      ),
+      RecipeSlot(
+        quantity: 3,
+        acceptedItems: [
+          SlotChoice(itemId: 'willow_log', qualityBias: 0.0),
+        ],
+      ),
+      RecipeSlot(
+        quantity: 1,
+        acceptedItems: [
+          SlotChoice(itemId: 'cured_leather', qualityBias: 0.0),
+        ],
+      ),
+    ],
+    modifierSlot: defaultModifier,
+    stationId: 'crafting_bench',
+    requiredStationTier: 3,
+    rarity: RecipeRarity.rare,
     energyCost: 12,
     durationSeconds: 7,
   );
 
-  // Armor
   static const Recipe leatherChest = Recipe(
     id: 'leather_chest',
     name: 'Leather Jerkin',
     icon: '🛡️',
-    description: 'Sew a light leather vest.',
+    description: 'Sew a light cured leather chestpiece.',
     resultItemId: 'leather_chest',
     resultQuantity: 1,
     requiredSkill: SkillType.crafting,
     requiredLevel: 2,
     xpReward: 25.0,
-    inputs: {'wild_berries': 4, 'wolf_pelt': 2},
+    slots: [
+      RecipeSlot(
+        quantity: 3,
+        acceptedItems: [
+          SlotChoice(itemId: 'cured_leather', qualityBias: 0.0),
+        ],
+      ),
+      RecipeSlot(
+        quantity: 2,
+        acceptedItems: [
+          SlotChoice(itemId: 'wild_berries', qualityBias: 0.0),
+        ],
+      ),
+    ],
+    modifierSlot: defaultModifier,
+    stationId: 'crafting_bench',
+    requiredStationTier: 1,
     energyCost: 5,
     durationSeconds: 4,
   );
@@ -469,13 +1062,29 @@ class Recipes {
     id: 'bronze_chest',
     name: 'Bronze Scale',
     icon: '🛡️',
-    description: 'Forge bronze plate mail.',
+    description: 'Forge scales of bronze over a leather lining.',
     resultItemId: 'bronze_chest',
     resultQuantity: 1,
     requiredSkill: SkillType.crafting,
     requiredLevel: 5,
     xpReward: 45.0,
-    inputs: {'copper_ore': 8, 'tin_ore': 4, 'river_clay': 2},
+    slots: [
+      RecipeSlot(
+        quantity: 4,
+        acceptedItems: [
+          SlotChoice(itemId: 'bronze_ingot', qualityBias: 0.0),
+        ],
+      ),
+      RecipeSlot(
+        quantity: 2,
+        acceptedItems: [
+          SlotChoice(itemId: 'cured_leather', qualityBias: 0.0),
+        ],
+      ),
+    ],
+    modifierSlot: defaultModifier,
+    stationId: 'crafting_bench',
+    requiredStationTier: 1,
     energyCost: 7,
     durationSeconds: 5,
   );
@@ -484,15 +1093,357 @@ class Recipes {
     id: 'steel_plate',
     name: 'Steel Cuirass',
     icon: '🛡️',
-    description: 'Forge heavy steel plate armor.',
+    description: 'Forge heavy steel plate armor reinforced with silk.',
     resultItemId: 'steel_plate',
     resultQuantity: 1,
     requiredSkill: SkillType.crafting,
     requiredLevel: 12,
     xpReward: 100.0,
-    inputs: {'iron_ore': 12, 'river_clay': 4, 'spider_silk': 2},
+    slots: [
+      RecipeSlot(
+        quantity: 5,
+        acceptedItems: [
+          SlotChoice(itemId: 'steel_ingot', qualityBias: 0.0),
+        ],
+      ),
+      RecipeSlot(
+        quantity: 2,
+        acceptedItems: [
+          SlotChoice(itemId: 'treated_silk', qualityBias: 0.0),
+        ],
+      ),
+    ],
+    modifierSlot: defaultModifier,
+    stationId: 'crafting_bench',
+    requiredStationTier: 2,
+    rarity: RecipeRarity.rare,
     energyCost: 10,
     durationSeconds: 6,
+  );
+
+  // ==========================================
+  // 7. NEW SPECIALISTS INTERMEDIATES (Smelter/Tannery)
+  // ==========================================
+  static const Recipe copperIngot = Recipe(
+    id: 'copper_ingot',
+    name: 'Copper Ingot',
+    icon: '🪙',
+    description: 'Smelt raw copper ore into a refined ingot.',
+    resultItemId: 'copper_ingot',
+    resultQuantity: 1,
+    requiredSkill: SkillType.crafting,
+    requiredLevel: 3,
+    xpReward: 12.0,
+    slots: [
+      RecipeSlot(
+        quantity: 3,
+        acceptedItems: [
+          SlotChoice(itemId: 'copper_ore', qualityBias: 0.0),
+        ],
+      ),
+    ],
+    modifierSlot: defaultModifier,
+    stationId: 'smelter',
+    requiredStationTier: 1,
+    energyCost: 3,
+    durationSeconds: 5,
+  );
+
+  static const Recipe tinIngot = Recipe(
+    id: 'tin_ingot',
+    name: 'Tin Ingot',
+    icon: '🪙',
+    description: 'Smelt raw tin ore into a refined ingot.',
+    resultItemId: 'tin_ingot',
+    resultQuantity: 1,
+    requiredSkill: SkillType.crafting,
+    requiredLevel: 5,
+    xpReward: 15.0,
+    slots: [
+      RecipeSlot(
+        quantity: 3,
+        acceptedItems: [
+          SlotChoice(itemId: 'tin_ore', qualityBias: 0.0),
+        ],
+      ),
+    ],
+    modifierSlot: defaultModifier,
+    stationId: 'smelter',
+    requiredStationTier: 1,
+    energyCost: 3,
+    durationSeconds: 6,
+  );
+
+  static const Recipe bronzeIngot = Recipe(
+    id: 'bronze_ingot_recipe',
+    name: 'Bronze Ingot',
+    icon: '🪙',
+    description: 'Smelt copper and tin ores into a strong bronze alloy.',
+    resultItemId: 'bronze_ingot',
+    resultQuantity: 1,
+    requiredSkill: SkillType.crafting,
+    requiredLevel: 6,
+    xpReward: 20.0,
+    slots: [
+      RecipeSlot(
+        quantity: 2,
+        acceptedItems: [
+          SlotChoice(itemId: 'copper_ore', qualityBias: 0.0),
+        ],
+      ),
+      RecipeSlot(
+        quantity: 1,
+        acceptedItems: [
+          SlotChoice(itemId: 'tin_ore', qualityBias: 0.0),
+        ],
+      ),
+    ],
+    modifierSlot: defaultModifier,
+    stationId: 'smelter',
+    requiredStationTier: 1,
+    energyCost: 4,
+    durationSeconds: 8,
+  );
+
+  static const Recipe ironIngot = Recipe(
+    id: 'iron_ingot',
+    name: 'Iron Ingot',
+    icon: '🪙',
+    description: 'Smelt raw iron ore into a heavy ingot.',
+    resultItemId: 'iron_ingot',
+    resultQuantity: 1,
+    requiredSkill: SkillType.crafting,
+    requiredLevel: 8,
+    xpReward: 25.0,
+    slots: [
+      RecipeSlot(
+        quantity: 3,
+        acceptedItems: [
+          SlotChoice(itemId: 'iron_ore', qualityBias: 0.0),
+        ],
+      ),
+    ],
+    modifierSlot: defaultModifier,
+    stationId: 'smelter',
+    requiredStationTier: 2,
+    energyCost: 5,
+    durationSeconds: 10,
+  );
+
+  static const Recipe steelIngot = Recipe(
+    id: 'steel_ingot',
+    name: 'Steel Ingot',
+    icon: '🪙',
+    description: 'Refine iron ore into a resilient steel ingot.',
+    resultItemId: 'steel_ingot',
+    resultQuantity: 1,
+    requiredSkill: SkillType.crafting,
+    requiredLevel: 12,
+    xpReward: 40.0,
+    slots: [
+      RecipeSlot(
+        quantity: 3,
+        acceptedItems: [
+          SlotChoice(itemId: 'iron_ore', qualityBias: 0.0),
+        ],
+      ),
+      RecipeSlot(
+        quantity: 1,
+        acceptedItems: [
+          SlotChoice(itemId: 'river_clay', qualityBias: 0.0),
+        ],
+      ),
+    ],
+    modifierSlot: defaultModifier,
+    stationId: 'smelter',
+    requiredStationTier: 3,
+    energyCost: 6,
+    durationSeconds: 15,
+  );
+
+  static const Recipe curedLeather = Recipe(
+    id: 'cured_leather_recipe',
+    name: 'Cured Leather',
+    icon: '💼',
+    description: 'Tan beast pelt into durable leather.',
+    resultItemId: 'cured_leather',
+    resultQuantity: 1,
+    requiredSkill: SkillType.crafting,
+    requiredLevel: 3,
+    xpReward: 15.0,
+    slots: [
+      RecipeSlot(
+        quantity: 1,
+        acceptedItems: [
+          SlotChoice(itemId: 'wolf_pelt', qualityBias: 0.0),
+        ],
+      ),
+      RecipeSlot(
+        quantity: 1,
+        acceptedItems: [
+          SlotChoice(itemId: 'river_clay', qualityBias: 0.0),
+        ],
+      ),
+    ],
+    modifierSlot: defaultModifier,
+    stationId: 'tannery',
+    requiredStationTier: 1,
+    energyCost: 3,
+    durationSeconds: 6,
+  );
+
+  static const Recipe treatedSilk = Recipe(
+    id: 'treated_silk_recipe',
+    name: 'Treated Silk',
+    icon: '🧵',
+    description: 'Treat spider silk with wild berries to make treated silk thread.',
+    resultItemId: 'treated_silk',
+    resultQuantity: 1,
+    requiredSkill: SkillType.crafting,
+    requiredLevel: 8,
+    xpReward: 25.0,
+    slots: [
+      RecipeSlot(
+        quantity: 2,
+        acceptedItems: [
+          SlotChoice(itemId: 'spider_silk', qualityBias: 0.0),
+        ],
+      ),
+      RecipeSlot(
+        quantity: 1,
+        acceptedItems: [
+          SlotChoice(itemId: 'wild_berries', qualityBias: 0.0),
+        ],
+      ),
+    ],
+    modifierSlot: defaultModifier,
+    stationId: 'tannery',
+    requiredStationTier: 2,
+    energyCost: 4,
+    durationSeconds: 10,
+  );
+
+  // ==========================================
+  // 8. NEW LEGENDARY BLUEPRINT RECIPES (Bench T3 / Apothecary T3)
+  // ==========================================
+  static const Recipe greaterSteelGreatsword = Recipe(
+    id: 'greater_steel_greatsword',
+    name: 'Greater Steel Greatsword',
+    icon: '⚔️',
+    description: 'A legendary massive blade forged of steel and troll claws.',
+    resultItemId: 'greater_steel_greatsword',
+    resultQuantity: 1,
+    requiredSkill: SkillType.crafting,
+    requiredLevel: 15,
+    xpReward: 250.0,
+    slots: [
+      RecipeSlot(
+        quantity: 6,
+        acceptedItems: [
+          SlotChoice(itemId: 'steel_ingot', qualityBias: 0.0),
+        ],
+      ),
+      RecipeSlot(
+        quantity: 4,
+        acceptedItems: [
+          SlotChoice(itemId: 'willow_log', qualityBias: 0.0),
+        ],
+      ),
+      RecipeSlot(
+        quantity: 2,
+        acceptedItems: [
+          SlotChoice(itemId: 'cured_leather', qualityBias: 0.0),
+        ],
+      ),
+      RecipeSlot(
+        quantity: 2,
+        acceptedItems: [
+          SlotChoice(itemId: 'troll_claw', qualityBias: 0.0),
+        ],
+      ),
+    ],
+    modifierSlot: defaultModifier,
+    stationId: 'crafting_bench',
+    requiredStationTier: 3,
+    rarity: RecipeRarity.legendary,
+    energyCost: 15,
+    durationSeconds: 10,
+  );
+
+  static const Recipe elixirOfLife4 = Recipe(
+    id: 'elixir_4',
+    name: "Alchemist's Elixir IV",
+    icon: '🧪',
+    description: 'A supreme elixir that restores immense health and energy.',
+    resultItemId: 'elixir_4',
+    resultQuantity: 1,
+    requiredSkill: SkillType.herbalism,
+    requiredLevel: 15,
+    xpReward: 200.0,
+    slots: [
+      RecipeSlot(
+        quantity: 1,
+        acceptedItems: [
+          SlotChoice(itemId: 'elixir_3', qualityBias: 0.0),
+        ],
+      ),
+      RecipeSlot(
+        quantity: 3,
+        acceptedItems: [
+          SlotChoice(itemId: 'nightshade', qualityBias: 0.0),
+        ],
+      ),
+      RecipeSlot(
+        quantity: 1,
+        acceptedItems: [
+          SlotChoice(itemId: 'spider_fang', qualityBias: 0.0),
+        ],
+      ),
+    ],
+    modifierSlot: defaultModifier,
+    stationId: 'apothecary',
+    requiredStationTier: 3,
+    rarity: RecipeRarity.legendary,
+    energyCost: 12,
+    durationSeconds: 8,
+  );
+
+  static const Recipe glyphMastery = Recipe(
+    id: 'glyph_mastery',
+    name: 'Glyph of Mastery',
+    icon: '🪨',
+    description: 'A legendary runic glyph containing pure mastery.',
+    resultItemId: 'glyph_mastery',
+    resultQuantity: 1,
+    requiredSkill: SkillType.lore,
+    requiredLevel: 15,
+    xpReward: 200.0,
+    slots: [
+      RecipeSlot(
+        quantity: 5,
+        acceptedItems: [
+          SlotChoice(itemId: 'river_clay', qualityBias: 0.0),
+        ],
+      ),
+      RecipeSlot(
+        quantity: 3,
+        acceptedItems: [
+          SlotChoice(itemId: 'nightshade', qualityBias: 0.0),
+        ],
+      ),
+      RecipeSlot(
+        quantity: 1,
+        acceptedItems: [
+          SlotChoice(itemId: 'troll_claw', qualityBias: 0.0),
+        ],
+      ),
+    ],
+    modifierSlot: defaultModifier,
+    stationId: 'crafting_bench',
+    requiredStationTier: 3,
+    rarity: RecipeRarity.legendary,
+    energyCost: 12,
+    durationSeconds: 8,
   );
 
   static Recipe getBackpackRecipe(int capacity) {
@@ -507,29 +1458,40 @@ class Recipes {
         requiredSkill: SkillType.crafting,
         requiredLevel: 5,
         xpReward: 40.0,
-        inputs: {'oak_log': 10, 'river_clay': 5},
-        energyCost: 8,
+        slots: [
+          RecipeSlot(
+            quantity: 10,
+            acceptedItems: [SlotChoice(itemId: 'oak_log', qualityBias: 0.0)],
+          ),
+          RecipeSlot(
+            quantity: 5,
+            acceptedItems: [SlotChoice(itemId: 'river_clay', qualityBias: 0.0)],
+          ),
+        ],
+        stationId: 'crafting_bench',
+        requiredStationTier: 1,
+        energyCost: 10,
         durationSeconds: 6,
       );
     } else {
       final tier = capacity - 7;
       final requiredLevel = 5 + (capacity - 8) * 2;
-      final Map<String, int> inputs = {};
+      final List<RecipeSlot> slots = [];
 
       if (capacity == 8) {
-        inputs['oak_log'] = 15;
-        inputs['river_clay'] = 10;
-        inputs['copper_ore'] = 5;
+        slots.add(const RecipeSlot(quantity: 15, acceptedItems: [SlotChoice(itemId: 'oak_log', qualityBias: 0.0)]));
+        slots.add(const RecipeSlot(quantity: 10, acceptedItems: [SlotChoice(itemId: 'river_clay', qualityBias: 0.0)]));
+        slots.add(const RecipeSlot(quantity: 5, acceptedItems: [SlotChoice(itemId: 'copper_ingot', qualityBias: 0.0)]));
       } else if (capacity == 9) {
-        inputs['willow_log'] = 20;
-        inputs['river_clay'] = 15;
-        inputs['tin_ore'] = 5;
+        slots.add(const RecipeSlot(quantity: 20, acceptedItems: [SlotChoice(itemId: 'willow_log', qualityBias: 0.0)]));
+        slots.add(const RecipeSlot(quantity: 15, acceptedItems: [SlotChoice(itemId: 'river_clay', qualityBias: 0.0)]));
+        slots.add(const RecipeSlot(quantity: 5, acceptedItems: [SlotChoice(itemId: 'tin_ingot', qualityBias: 0.0)]));
       } else if (capacity == 10) {
-        inputs['willow_log'] = 25;
-        inputs['iron_ore'] = 10;
+        slots.add(const RecipeSlot(quantity: 25, acceptedItems: [SlotChoice(itemId: 'willow_log', qualityBias: 0.0)]));
+        slots.add(const RecipeSlot(quantity: 10, acceptedItems: [SlotChoice(itemId: 'iron_ingot', qualityBias: 0.0)]));
       } else {
-        inputs['willow_log'] = 25 + (capacity - 10) * 5;
-        inputs['iron_ore'] = 10 + (capacity - 10) * 5;
+        slots.add(RecipeSlot(quantity: 25 + (capacity - 10) * 5, acceptedItems: [const SlotChoice(itemId: 'willow_log', qualityBias: 0.0)]));
+        slots.add(RecipeSlot(quantity: 10 + (capacity - 10) * 5, acceptedItems: [const SlotChoice(itemId: 'iron_ingot', qualityBias: 0.0)]));
       }
 
       return Recipe(
@@ -542,7 +1504,9 @@ class Recipes {
         requiredSkill: SkillType.crafting,
         requiredLevel: requiredLevel,
         xpReward: 50.0 + (capacity - 8) * 10.0,
-        inputs: inputs,
+        slots: slots,
+        stationId: 'crafting_bench',
+        requiredStationTier: 1,
         energyCost: 10,
         durationSeconds: 6,
       );
@@ -580,13 +1544,21 @@ class Recipes {
     leatherChest,
     bronzeChest,
     steelPlate,
+    copperIngot,
+    tinIngot,
+    bronzeIngot,
+    ironIngot,
+    steelIngot,
+    curedLeather,
+    treatedSilk,
+    greaterSteelGreatsword,
+    elixirOfLife4,
+    glyphMastery,
   ];
 
   static Recipe? findById(String id) {
     try {
       if (id == 'leather_backpack' || id == 'backpack_upgrade') {
-        // Return a dynamic backpack recipe matching some standard capacity
-        // e.g. starting capacity 4 or 8.
         return getBackpackRecipe(id == 'leather_backpack' ? 4 : 8);
       }
       return all.firstWhere((recipe) => recipe.id == id);
