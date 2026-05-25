@@ -6,7 +6,13 @@ import '../models/codex.dart';
 import '../models/beast.dart';
 import '../models/zone.dart';
 import '../models/item.dart';
+import '../models/main_quests.dart';
 import '../theme/game_theme.dart';
+import '../widgets/reading_overlay.dart';
+import '../widgets/pulsing_weather_chip.dart';
+import '../models/weather.dart';
+import 'codex_puzzle_view.dart';
+
 
 class CodexView extends StatelessWidget {
   const CodexView({super.key});
@@ -383,6 +389,12 @@ class CodexView extends StatelessWidget {
         icon = Icons.vpn_key;
         color = Colors.purpleAccent;
         break;
+      case RewardKind.offerQuest:
+        final nextQuest = MainQuests.findById(reward.targetId ?? '');
+        label = 'Quest: ${nextQuest?.title ?? reward.targetId}';
+        icon = Icons.assignment;
+        color = Colors.orangeAccent;
+        break;
     }
 
     return Container(
@@ -510,14 +522,38 @@ class CodexView extends StatelessWidget {
               ),
             ),
             trailing: const Icon(Icons.chevron_right, color: GameTheme.textMuted),
-            onTap: () => _showBeastStatsModal(context, beast),
+            onTap: () => _showBeastStatsModal(context, engine, beast),
           ),
         );
       },
     );
   }
 
-  void _showBeastStatsModal(BuildContext context, Beast beast) {
+  String _getBeastSpecHint(String beastId) {
+    switch (beastId) {
+      case 'forest_boar':
+        return "Boars paw the dirt before they charge. Use the Defend stance to mitigate the heavy impact, or Sentinel to reflect it back!";
+      case 'cave_spider':
+        return "Spiders web up their prey to lock them in place. Use Read Tells to anticipate their sticky traps, or Skirmisher timer speedups to strike first!";
+      case 'shadow_wolf':
+        return "Wolves howl to summon support, raising their defense. Use Berserker's Heavy Strike to smash through their fortified guard!";
+      case 'cavern_troll':
+        return "Cavern trolls strike slow but hit incredibly hard. Use Defend to trigger a Guardian counter-strike, or Bastion's health regen to weather the blows!";
+      case 'tide_hound':
+        return "Tide hounds leap quickly through the sea mist. Under Sea Fog, the Reaper's crit chance increases to overwhelm their swift dodging!";
+      case 'brine_crawler':
+        return "Brine crawlers spit acidic salt water. Carry quick-slot foods like Kelp Wrap or Pearl Tonic to cleanse the burn and restore energy!";
+      case 'salt_touched_drowned':
+        return "The drowned wail at low health, dealing fatal decay damage. Read their Tells to know when to execute them with a final Reaper blow!";
+      default:
+        return "Analyze their telegraphs and select matching stances to gain a tactical edge.";
+    }
+  }
+
+  void _showBeastStatsModal(BuildContext context, GameEngine engine, Beast beast) {
+    final entry = engine.bestiary[beast.id];
+    final defeatCount = entry?.defeatCount ?? 0;
+
     showDialog(
       context: context,
       builder: (context) {
@@ -537,50 +573,79 @@ class CodexView extends StatelessWidget {
               ),
             ],
           ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _buildBeastStatRow('❤️ Max Health', '${beast.maxHealth} HP'),
-              _buildBeastStatRow('⚔️ Attack Power', '${beast.attackPower}'),
-              _buildBeastStatRow('🛡️ Defense', '${beast.defense}'),
-              _buildBeastStatRow('⭐ XP Granted', '${beast.xpReward} Combat XP'),
-              const Divider(color: GameTheme.border, height: 20),
-              const Text(
-                'POSSIBLE LOOT',
-                style: TextStyle(
-                  color: GameTheme.accentGold,
-                  fontSize: 11,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 1.0,
-                ),
-              ),
-              const SizedBox(height: 6),
-              ...beast.lootTable.map((loot) {
-                return Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 4.0),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Row(
-                        children: [
-                          Text(loot.item.icon),
-                          const SizedBox(width: 8),
-                          Text(
-                            loot.item.name,
-                            style: const TextStyle(color: GameTheme.textLight, fontSize: 13),
-                          ),
-                        ],
-                      ),
-                      Text(
-                        '${(loot.chance * 100).toInt()}% (${loot.minQuantity}-${loot.maxQuantity})',
-                        style: const TextStyle(color: GameTheme.textMuted, fontSize: 12),
-                      ),
-                    ],
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _buildBeastStatRow('❤️ Max Health', '${beast.maxHealth} HP'),
+                _buildBeastStatRow('⚔️ Attack Power', '${beast.attackPower}'),
+                _buildBeastStatRow('🛡️ Defense', '${beast.defense}'),
+                _buildBeastStatRow('⭐ XP Granted', '${beast.xpReward} Combat XP'),
+                
+                if (defeatCount >= 3) ...[
+                  const Divider(color: GameTheme.border, height: 20),
+                  const Text(
+                    '💡 SPECIALIZATION COMBAT HINT',
+                    style: TextStyle(
+                      color: GameTheme.accentGold,
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1.0,
+                    ),
                   ),
-                );
-              }),
-            ],
+                  const SizedBox(height: 6),
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: GameTheme.accentGold.withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: GameTheme.accentGold.withOpacity(0.3)),
+                    ),
+                    child: Text(
+                      _getBeastSpecHint(beast.id),
+                      style: const TextStyle(color: GameTheme.textLight, fontSize: 11, fontStyle: FontStyle.italic),
+                    ),
+                  ),
+                ],
+
+                const Divider(color: GameTheme.border, height: 20),
+                const Text(
+                  'POSSIBLE LOOT',
+                  style: TextStyle(
+                    color: GameTheme.accentGold,
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1.0,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                ...beast.lootTable.map((loot) {
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4.0),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            Text(loot.item.icon),
+                            const SizedBox(width: 8),
+                            Text(
+                              loot.item.name,
+                              style: const TextStyle(color: GameTheme.textLight, fontSize: 13),
+                            ),
+                          ],
+                        ),
+                        Text(
+                          '${(loot.chance * 100).toInt()}% (${loot.minQuantity}-${loot.maxQuantity})',
+                          style: const TextStyle(color: GameTheme.textMuted, fontSize: 12),
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+              ],
+            ),
           ),
           actions: [
             TextButton(
@@ -675,21 +740,30 @@ class CodexView extends StatelessWidget {
                               fontSize: 14,
                             ),
                           ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: Colors.amber.withOpacity(0.12),
-                              borderRadius: BorderRadius.circular(4),
-                              border: Border.all(color: Colors.amber.withOpacity(0.4), width: 1),
-                            ),
-                            child: const Text(
-                              'Anomalous',
-                              style: TextStyle(
-                                color: Colors.amberAccent,
-                                fontSize: 9,
-                                fontWeight: FontWeight.bold,
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: Colors.amber.withOpacity(0.12),
+                                  borderRadius: BorderRadius.circular(4),
+                                  border: Border.all(color: Colors.amber.withOpacity(0.4), width: 1),
+                                ),
+                                child: const Text(
+                                  'Anomalous',
+                                  style: TextStyle(
+                                    color: Colors.amberAccent,
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
                               ),
-                            ),
+                              if (zone.id.contains('coast')) ...[
+                                const SizedBox(width: 6),
+                                PulsingWeatherChip(weather: engine.coastWeather),
+                              ],
+                            ],
                           ),
                         ],
                       ),
@@ -718,15 +792,265 @@ class CodexView extends StatelessWidget {
     if (zoneId == 'town_square') return '🏡';
     if (zoneId.contains('woods') || zoneId.contains('forest')) return '🌲';
     if (zoneId.contains('mine') || zoneId.contains('caverns') || zoneId.contains('shafts')) return '⛏️';
+    if (zoneId.contains('coast')) return '🌊';
     return '🗺️';
   }
 
   // --- Stubs for future expansions ---
   Widget _buildFragmentsTab(BuildContext context, GameEngine engine) {
-    return const Center(
-      child: Text(
-        'Fragments Tab (Under Construction)',
-        style: TextStyle(color: GameTheme.textMuted),
+    final tags = CodexTag.values.where((t) => t != CodexTag.misc).toList();
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ...tags.map((tag) {
+            final fragmentsInTag = CodexFragments.all
+                .where((f) => f.tag == tag && engine.knownCodexFragmentIds.contains(f.id))
+                .toList();
+
+            if (fragmentsInTag.isEmpty) {
+              return const SizedBox.shrink();
+            }
+
+            final isSolved = engine.solvedTagPuzzles.contains(tag);
+            final reading = CodexReadings.forTag(tag);
+
+            return Card(
+              color: GameTheme.cardBg,
+              margin: const EdgeInsets.only(bottom: 16),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+                side: BorderSide(
+                  color: isSolved ? GameTheme.accentGold.withOpacity(0.5) : GameTheme.border,
+                  width: isSolved ? 2 : 1,
+                ),
+              ),
+              child: ExpansionTile(
+                key: PageStorageKey<String>('fragments_tag_${tag.name}'),
+                title: Row(
+                  children: [
+                    Text(
+                      tag.name.toUpperCase(),
+                      style: TextStyle(
+                        color: isSolved ? GameTheme.accentGold : Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: GameTheme.border,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        '${fragmentsInTag.length}/10',
+                        style: const TextStyle(fontSize: 10, color: GameTheme.textLight),
+                      ),
+                    ),
+                    if (isSolved) ...[
+                      const SizedBox(width: 8),
+                      const Icon(Icons.check_circle, color: GameTheme.accentGold, size: 16),
+                    ],
+                  ],
+                ),
+                subtitle: Text(
+                  isSolved
+                      ? 'Reading unlocked: ${reading?.title ?? ""}'
+                      : 'Gather fragments to unlock puzzle',
+                  style: const TextStyle(fontSize: 12, color: GameTheme.textMuted),
+                ),
+                childrenPadding: const EdgeInsets.all(16),
+                children: [
+                  ...fragmentsInTag.map((fragment) {
+                    final isRead = engine.readCodexFragmentIds.contains(fragment.id);
+                    return ListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(
+                        isRead ? Icons.menu_book : Icons.bookmark,
+                        color: isRead ? GameTheme.textMuted : GameTheme.accentGold,
+                        size: 16,
+                      ),
+                      title: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              isRead ? fragment.title : '???',
+                              style: TextStyle(
+                                color: isRead ? Colors.white : GameTheme.textMuted,
+                                fontStyle: isRead ? FontStyle.normal : FontStyle.italic,
+                              ),
+                            ),
+                          ),
+                          if (!isRead) ...[
+                            const SizedBox(width: 8),
+                            Container(
+                              width: 8,
+                              height: 8,
+                              decoration: const BoxDecoration(
+                                color: GameTheme.accentGold,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                      onTap: () => _showFragmentDialog(context, engine, fragment),
+                    );
+                  }),
+                  const SizedBox(height: 12),
+                  if (isSolved && reading != null) ...[
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: () => _showReading(context, reading),
+                        icon: const Icon(Icons.menu_book, size: 16),
+                        label: Text('Read the ${reading.title}'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: GameTheme.accentGold,
+                          foregroundColor: Colors.black,
+                        ),
+                      ),
+                    ),
+                  ] else if (fragmentsInTag.length >= 3) ...[
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => CodexPuzzleView(tag: tag),
+                            ),
+                          );
+                        },
+                        icon: const Icon(Icons.extension, size: 16),
+                        label: const Text('Solve Puzzle'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: GameTheme.wayfindingBlue,
+                          foregroundColor: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            );
+          }),
+          _buildSynthesisSection(context, engine),
+        ],
+      ),
+    );
+  }
+
+  void _showFragmentDialog(BuildContext context, GameEngine engine, CodexFragment fragment) {
+    if (!engine.readCodexFragmentIds.contains(fragment.id)) {
+      engine.readCodexFragment(fragment.id);
+    }
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: GameTheme.cardBg,
+        title: Text(fragment.title, style: const TextStyle(color: Colors.white)),
+        content: Text(
+          fragment.text,
+          style: const TextStyle(color: GameTheme.textLight, fontStyle: FontStyle.italic),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showReading(BuildContext context, CodexReading reading) {
+    showGeneralDialog(
+      context: context,
+      barrierDismissible: false,
+      barrierLabel: 'Reading',
+      pageBuilder: (context, _, __) => ReadingOverlay(
+        reading: reading,
+        onDismiss: () => Navigator.of(context).pop(),
+      ),
+    );
+  }
+
+  Widget _buildSynthesisSection(BuildContext context, GameEngine engine) {
+    final solvedCount = engine.solvedTagPuzzles.length;
+    if (solvedCount < 4) {
+      return const SizedBox.shrink();
+    }
+
+    final isAllSolved = solvedCount == 5;
+
+    return Card(
+      color: GameTheme.cardBg,
+      margin: const EdgeInsets.only(top: 8, bottom: 24),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(
+          color: isAllSolved ? GameTheme.accentGold.withOpacity(0.8) : GameTheme.border,
+          width: isAllSolved ? 2 : 1,
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Row(
+              children: [
+                Icon(Icons.auto_awesome, color: GameTheme.accentGold, size: 20),
+                SizedBox(width: 8),
+                Text(
+                  'SYNTHESIS',
+                  style: TextStyle(
+                    color: GameTheme.accentGold,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                    letterSpacing: 1.5,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            if (!isAllSolved) ...[
+              const Text(
+                'One more reading awaits...',
+                style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Solve the last tag\'s puzzle to unlock the Synthesis.',
+                style: TextStyle(color: GameTheme.textMuted, fontSize: 13),
+              ),
+            ] else ...[
+              const Text(
+                'All readings united. The full timeline is clear.',
+                style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
+              ),
+              const SizedBox(height: 16),
+              ElevatedButton.icon(
+                onPressed: () => _showReading(context, CodexReadings.synthesisReading),
+                icon: const Icon(Icons.auto_awesome, size: 16),
+                label: const Text('Read the Synthesis'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: GameTheme.accentGold,
+                  foregroundColor: Colors.black,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }

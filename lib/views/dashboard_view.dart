@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../engine/game_engine.dart';
 import '../models/skill.dart';
 import '../models/quest.dart';
+import '../models/main_quests.dart';
 import '../models/zone.dart';
 import '../models/structure.dart';
 import '../theme/game_theme.dart';
@@ -19,6 +20,11 @@ import '../widgets/fluid_wave_background.dart';
 import '../widgets/flying_item_overlay.dart';
 import '../widgets/coin_animation.dart';
 import '../widgets/particle_explosion.dart';
+import '../models/weather.dart';
+import '../widgets/pulsing_weather_chip.dart';
+import '../widgets/quick_slot_bar.dart';
+import '../widgets/combat_action_bar.dart';
+
 
 class DashboardView extends StatefulWidget {
   const DashboardView({Key? key}) : super(key: key);
@@ -110,6 +116,8 @@ class _DashboardViewState extends State<DashboardView> {
                 child: Column(
                   children: [
                     _buildSkillsPanel(engine),
+                    const SizedBox(height: 12),
+                    const QuickSlotBar(),
                     const SizedBox(height: 12),
                     _buildInventoryPanel(engine),
                   ],
@@ -331,6 +339,8 @@ class _DashboardViewState extends State<DashboardView> {
               ),
             ],
           ),
+          const SizedBox(height: 12),
+          const CombatActionBar(),
           const SizedBox(height: 16),
 
           // Scrolling Log Console
@@ -427,13 +437,45 @@ class _DashboardViewState extends State<DashboardView> {
                     ),
                   ),
                   const SizedBox(height: 2),
-                  Text(
-                    'Weather: ${currentZone.weatherBonusDescription}',
-                    style: const TextStyle(
-                      color: GameTheme.accentGold,
-                      fontSize: 12,
+                  if (currentZone.id.contains('coast')) ...[
+                    Builder(
+                      builder: (context) {
+                        final remaining = engine.nextWeatherRollAt.difference(DateTime.now());
+                        final minutes = remaining.inMinutes;
+                        final seconds = remaining.inSeconds % 60;
+                        final timeStr = remaining.isNegative ? "0:00" : "$minutes:${seconds.toString().padLeft(2, '0')}";
+                        return Row(
+                          children: [
+                            const Text(
+                              'Weather: ',
+                              style: TextStyle(
+                                color: GameTheme.accentGold,
+                                fontSize: 12,
+                              ),
+                            ),
+                            PulsingWeatherChip(weather: engine.coastWeather),
+                            const SizedBox(width: 6),
+                            Text(
+                              '($timeStr)',
+                              style: const TextStyle(
+                                color: GameTheme.textMuted,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ],
+                        );
+                      }
                     ),
-                  ),
+                  ] else ...[
+                    Text(
+                      'Weather: ${currentZone.weatherBonusDescription}',
+                      style: const TextStyle(
+                        color: GameTheme.accentGold,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+
                 ],
               ),
             ),
@@ -1044,7 +1086,9 @@ class _DashboardViewState extends State<DashboardView> {
     final activeActionState = engine.activeAction;
 
     final actionsList = List<ZoneAction>.from(zone.actions);
+    actionsList.removeWhere((action) => !engine.isActionVisible(action));
     if (engine.hasStructureInZone(zone.id, 'outpost_shelter')) {
+
       actionsList.add(const ZoneAction(
         id: 'shelter_rest',
         name: 'Rest in Shelter',
@@ -2076,6 +2120,7 @@ class _DashboardViewState extends State<DashboardView> {
 
   Widget _buildObjectiveRow(QuestObjective obj) {
     final bool isDone = obj.isComplete;
+    final bool isComingSoon = obj.comingSoon;
     final progress = obj.targetCount > 0 ? (obj.currentCount / obj.targetCount) : 0.0;
     
     // Format target name nicely
@@ -2100,7 +2145,17 @@ class _DashboardViewState extends State<DashboardView> {
       case ObjectiveKind.upgrade: kindText = 'Upgrade'; break;
       case ObjectiveKind.masterwork: kindText = 'Complete'; break;
       case ObjectiveKind.codexRead: kindText = 'Read Codex Fragments'; break;
+      case ObjectiveKind.cleanse: kindText = 'Cleanse'; break;
       default: kindText = 'Objective'; break;
+    }
+
+    final Color textColor = isComingSoon 
+        ? GameTheme.textMuted 
+        : (isDone ? GameTheme.textMuted : GameTheme.textLight);
+
+    String labelText = '$kindText $targetLabel';
+    if (isComingSoon) {
+      labelText += ' (Coming Soon)';
     }
 
     return Padding(
@@ -2112,35 +2167,56 @@ class _DashboardViewState extends State<DashboardView> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Expanded(
-                child: Text(
-                  '• $kindText $targetLabel',
-                  style: TextStyle(
-                    color: isDone ? GameTheme.textMuted : GameTheme.textLight,
-                    fontSize: 12,
-                    decoration: isDone ? TextDecoration.lineThrough : null,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                child: Row(
+                  children: [
+                    if (isComingSoon) ...[
+                      const Icon(Icons.lock_clock, color: GameTheme.textMuted, size: 14),
+                      const SizedBox(width: 4),
+                    ] else ...[
+                      Text(
+                        '• ',
+                        style: TextStyle(
+                          color: textColor,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                    Expanded(
+                      child: Text(
+                        labelText,
+                        style: TextStyle(
+                          color: textColor,
+                          fontSize: 12,
+                          decoration: isDone ? TextDecoration.lineThrough : null,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
                 ),
               ),
               const SizedBox(width: 8),
-              Text(
-                '${obj.currentCount}/${obj.targetCount}',
-                style: TextStyle(
-                  color: isDone ? GameTheme.textMuted : GameTheme.textLight,
-                  fontSize: 12,
+              if (!isComingSoon)
+                Text(
+                  '${obj.currentCount}/${obj.targetCount}',
+                  style: TextStyle(
+                    color: textColor,
+                    fontSize: 12,
+                  ),
                 ),
-              ),
             ],
           ),
           const SizedBox(height: 4),
           ClipRRect(
             borderRadius: BorderRadius.circular(4),
             child: LinearProgressIndicator(
-              value: progress,
+              value: isComingSoon ? 0.0 : progress,
               backgroundColor: GameTheme.border,
               valueColor: AlwaysStoppedAnimation<Color>(
-                isDone ? GameTheme.textMuted : GameTheme.accentGold,
+                isComingSoon 
+                    ? GameTheme.textMuted.withOpacity(0.3) 
+                    : (isDone ? GameTheme.textMuted : GameTheme.accentGold),
               ),
               minHeight: 4,
             ),
@@ -2182,6 +2258,12 @@ class _DashboardViewState extends State<DashboardView> {
         label = 'Unlock';
         icon = Icons.vpn_key;
         color = Colors.purpleAccent;
+        break;
+      case RewardKind.offerQuest:
+        final nextQuest = MainQuests.findById(reward.targetId ?? '');
+        label = 'Quest: ${nextQuest?.title ?? reward.targetId}';
+        icon = Icons.assignment;
+        color = Colors.orangeAccent;
         break;
     }
 

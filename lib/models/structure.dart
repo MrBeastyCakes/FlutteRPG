@@ -152,6 +152,19 @@ class Structures {
     xpReward: 60.0,
   );
 
+  static const Structure saltPress = Structure(
+    id: 'salt_press',
+    name: 'Salt Press',
+    description: 'Presses salt, cures provisions, and stabilizes brine reagents. The lighthouse keepers used these before the storm.',
+    icon: '🧂',
+    requiredSkill: SkillType.cooking,
+    requiredLevel: 3,
+    cost: {'driftwood': 4, 'oak_log': 8, 'river_clay': 6},
+    durationSeconds: 12,
+    energyCost: 8,
+    xpReward: 40.0,
+  );
+
   static const List<Structure> all = [
     craftingBench,
     fieldKitchen,
@@ -159,6 +172,7 @@ class Structures {
     smelter,
     tannery,
     apothecary,
+    saltPress,
   ];
 
   static Structure? findById(String id) {
@@ -403,6 +417,48 @@ class Stations {
     ],
   );
 
+  static const Station saltPress = Station(
+    id: 'salt_press',
+    name: 'Salt Press',
+    icon: '🧂',
+    description: 'Presses salt, cures provisions, and stabilizes brine reagents. The lighthouse keepers used these before the storm.',
+    primarySkill: SkillType.cooking,
+    enabledSkills: [SkillType.cooking, SkillType.herbalism],
+    maxTier: 3,
+    tiers: [
+      StationTier(
+        tier: 1,
+        upgradeCost: {'driftwood': 4, 'oak_log': 8, 'river_clay': 6},
+        upgradeDurationSeconds: 12,
+        upgradeEnergyCost: 8,
+        requiredSkillLevel: 3,
+        qualityBias: 0.0,
+        queueSlots: 1,
+        speedBonus: 0.0,
+      ),
+      StationTier(
+        tier: 2,
+        upgradeCost: {'driftwood': 8, 'salt_crystal': 6, 'pearl_shell': 2},
+        upgradeDurationSeconds: 20,
+        upgradeEnergyCost: 14,
+        requiredSkillLevel: 8,
+        qualityBias: 0.05,
+        queueSlots: 2,
+        speedBonus: 0.10,
+      ),
+      StationTier(
+        tier: 3,
+        upgradeCost: {'driftwood': 12, 'salt_crystal': 12, 'pearl_shell': 5},
+        upgradeDurationSeconds: 30,
+        upgradeEnergyCost: 22,
+        requiredSkillLevel: 14,
+        qualityBias: 0.12,
+        queueSlots: 3,
+        speedBonus: 0.20,
+      ),
+    ],
+  );
+
   static const List<Station> all = [
     craftingBench,
     fieldKitchen,
@@ -410,6 +466,7 @@ class Stations {
     smelter,
     tannery,
     apothecary,
+    saltPress,
   ];
 
   static Station? findById(String id) {

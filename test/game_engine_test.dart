@@ -4,6 +4,7 @@ import 'package:flutter_text_based_rpg/models/item.dart';
 import 'package:flutter_text_based_rpg/models/skill.dart';
 import 'package:flutter_text_based_rpg/models/masterwork.dart';
 import 'package:flutter_text_based_rpg/models/zone.dart';
+import 'package:flutter_text_based_rpg/models/codex.dart';
 
 void main() {
   group('GameEngine Stats & Actions Tests', () {
@@ -176,6 +177,23 @@ void main() {
       expect(engine.unlockedZoneIds.length, 1);
       expect(engine.unlockedZoneIds.contains('town_square'), true);
       expect(engine.activeAction, null);
+    });
+
+    test('inspect_obelisk completion attempts Wilds and Old Empire drops', () {
+      final engine = GameEngine();
+      engine.unlockZone('whispering_woods_1');
+      engine.travelTo(Zones.whisperingWoodsTier1);
+
+      final actionsList = Zones.whisperingWoodsTier1.actions;
+      final obelisk = actionsList.firstWhere((a) => a.id == 'inspect_obelisk');
+      expect(obelisk, isNotNull);
+    });
+
+    test('Wilds beast defeat (Forest Boar) drops region-tagged fragment', () {
+      final engine = GameEngine();
+      final before = engine.knownCodexFragmentIds.length;
+      engine.tryDropFragment(CodexTag.wilds, 1.0);
+      expect(engine.knownCodexFragmentIds.length, greaterThan(before));
     });
   });
 }

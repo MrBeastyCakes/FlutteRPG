@@ -142,13 +142,21 @@ void main() {
       expect(wf10, isNotNull);
       expect(wf10!.title, 'The Lost Outpost');
 
-      final wc20 = MasterworkTasks.findForSkill(SkillType.woodcutting, 20);
-      expect(wc20, isNotNull);
-      expect(wc20!.title, 'The Whisperer\'s Heart');
+      final wc20Logger = MasterworkTasks.findForSkill(SkillType.woodcutting, 20, 'woodcutting_logger');
+      expect(wc20Logger, isNotNull);
+      expect(wc20Logger!.title, 'The Old Stand');
 
-      final lore20 = MasterworkTasks.findForSkill(SkillType.lore, 20);
-      expect(lore20, isNotNull);
-      expect(lore20!.title, 'The Codex of Ages');
+      final wc20Arborist = MasterworkTasks.findForSkill(SkillType.woodcutting, 20, 'woodcutting_arborist');
+      expect(wc20Arborist, isNotNull);
+      expect(wc20Arborist!.title, 'The Sapling Path');
+
+      final lore20Loremaster = MasterworkTasks.findForSkill(SkillType.lore, 20, 'lore_loremaster');
+      expect(lore20Loremaster, isNotNull);
+      expect(lore20Loremaster!.title, 'The Polyphonic Reading');
+
+      final lore20GlyphCarver = MasterworkTasks.findForSkill(SkillType.lore, 20, 'lore_glyph_carver');
+      expect(lore20GlyphCarver, isNotNull);
+      expect(lore20GlyphCarver!.title, 'The Twin Glyphs');
     });
   });
 }

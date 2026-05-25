@@ -1446,6 +1446,107 @@ class Recipes {
     durationSeconds: 8,
   );
 
+  static const Recipe saltCuredTrout = Recipe(
+    id: 'salt_cured_trout',
+    name: 'Salt-Cured Trout',
+    icon: '🐟',
+    description: 'Preserve a fresh trout with sea-salt.',
+    resultItemId: 'salt_cured_trout',
+    resultQuantity: 1,
+    requiredSkill: SkillType.cooking,
+    requiredLevel: 3,
+    xpReward: 25,
+    slots: [
+      RecipeSlot(quantity: 1, acceptedItems: [SlotChoice(itemId: 'raw_trout', qualityBias: 0.0)]),
+      RecipeSlot(quantity: 1, acceptedItems: [SlotChoice(itemId: 'salt_crystal', qualityBias: 0.0)]),
+    ],
+    modifierSlot: defaultModifier,
+    stationId: 'salt_press',
+    energyCost: 3,
+    durationSeconds: 4,
+  );
+
+  static const Recipe brinedBoar = Recipe(
+    id: 'brined_boar',
+    name: 'Brined Boar',
+    icon: '🍖',
+    description: 'Brine boar meat in salt-water.',
+    resultItemId: 'brined_boar',
+    resultQuantity: 1,
+    requiredSkill: SkillType.cooking,
+    requiredLevel: 5,
+    xpReward: 30,
+    slots: [
+      RecipeSlot(quantity: 2, acceptedItems: [SlotChoice(itemId: 'boar_meat', qualityBias: 0.0)]),
+      RecipeSlot(quantity: 1, acceptedItems: [SlotChoice(itemId: 'salt_crystal', qualityBias: 0.0)]),
+    ],
+    modifierSlot: defaultModifier,
+    stationId: 'salt_press',
+    energyCost: 3,
+    durationSeconds: 5,
+  );
+
+  static const Recipe kelpWrap = Recipe(
+    id: 'kelp_wrap',
+    name: 'Kelp Wrap',
+    icon: '🥬',
+    description: 'Wrap a baked potato in salted kelp.',
+    resultItemId: 'kelp_wrap',
+    resultQuantity: 1,
+    requiredSkill: SkillType.cooking,
+    requiredLevel: 4,
+    xpReward: 28,
+    slots: [
+      RecipeSlot(quantity: 2, acceptedItems: [SlotChoice(itemId: 'kelp', qualityBias: 0.0)]),
+      RecipeSlot(quantity: 1, acceptedItems: [SlotChoice(itemId: 'baked_potato', qualityBias: 0.0)]),
+    ],
+    modifierSlot: defaultModifier,
+    stationId: 'salt_press',
+    energyCost: 3,
+    durationSeconds: 4,
+  );
+
+  static const Recipe pearlTonic = Recipe(
+    id: 'pearl_tonic',
+    name: 'Pearl Tonic',
+    icon: '🧪',
+    description: 'Distill a pearlescent draught.',
+    resultItemId: 'pearl_tonic',
+    resultQuantity: 1,
+    requiredSkill: SkillType.herbalism,
+    requiredLevel: 6,
+    xpReward: 40,
+    slots: [
+      RecipeSlot(quantity: 1, acceptedItems: [SlotChoice(itemId: 'pearl_shell', qualityBias: 0.0)]),
+      RecipeSlot(quantity: 3, acceptedItems: [SlotChoice(itemId: 'kelp', qualityBias: 0.0)]),
+      RecipeSlot(quantity: 1, acceptedItems: [SlotChoice(itemId: 'hot_water', qualityBias: 0.0)]),
+    ],
+    modifierSlot: defaultModifier,
+    stationId: 'salt_press',
+    energyCost: 5,
+    durationSeconds: 6,
+  );
+
+  static const Recipe brineStabilizer = Recipe(
+    id: 'brine_stabilizer',
+    name: 'Brine Stabilizer',
+    icon: '🫙',
+    description: 'A briny gel that stabilizes finicky recipes.',
+    resultItemId: 'brine_stabilizer',
+    resultQuantity: 1,
+    requiredSkill: SkillType.cooking,
+    requiredLevel: 5,
+    xpReward: 35,
+    slots: [
+      RecipeSlot(quantity: 2, acceptedItems: [SlotChoice(itemId: 'salt_crystal', qualityBias: 0.0)]),
+      RecipeSlot(quantity: 1, acceptedItems: [SlotChoice(itemId: 'river_clay', qualityBias: 0.0)]),
+    ],
+    modifierSlot: defaultModifier,
+    stationId: 'salt_press',
+    energyCost: 4,
+    durationSeconds: 5,
+  );
+
   static Recipe getBackpackRecipe(int capacity) {
     if (capacity < 8) {
       return const Recipe(
@@ -1554,6 +1655,11 @@ class Recipes {
     greaterSteelGreatsword,
     elixirOfLife4,
     glyphMastery,
+    saltCuredTrout,
+    brinedBoar,
+    kelpWrap,
+    pearlTonic,
+    brineStabilizer,
   ];
 
   static Recipe? findById(String id) {

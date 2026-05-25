@@ -44,7 +44,7 @@ class _SkillsViewState extends State<SkillsView> {
 
         // Find if there's an available Masterwork task for this gated skill
         final masterworkTask = skill.isGated 
-            ? MasterworkTasks.findForSkill(skill.type, skill.levelCap)
+            ? MasterworkTasks.findForSkill(skill.type, skill.levelCap, engine.specForSkill(skill.type))
             : null;
 
         return Card(
@@ -126,6 +126,68 @@ class _SkillsViewState extends State<SkillsView> {
                     color: skill.isGated ? GameTheme.healthRed : skillColor,
                     height: 10,
                   ),
+
+                  // Specialization Badges (Always visible if active)
+                  () {
+                    final spec = engine.specForSkill(skill.type);
+                    final subSpec = engine.subSpecForSkill(skill.type);
+                    if (spec == null && subSpec == null) return const SizedBox.shrink();
+                    return Padding(
+                      padding: const EdgeInsets.only(top: 8.0),
+                      child: Wrap(
+                        spacing: 6,
+                        runSpacing: 4,
+                        children: [
+                          if (spec != null)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.blue.withOpacity(0.15),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: Colors.blue.withOpacity(0.5), width: 1),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Text('🛡️ ', style: TextStyle(fontSize: 10)),
+                                  Text(
+                                    engine.specDisplayName(spec),
+                                    style: const TextStyle(
+                                      color: Colors.blueAccent,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          if (subSpec != null)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: GameTheme.accentGold.withOpacity(0.15),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: GameTheme.accentGold.withOpacity(0.5), width: 1),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Text('👑 ', style: TextStyle(fontSize: 10)),
+                                  Text(
+                                    engine.subSpecDisplayName(subSpec),
+                                    style: const TextStyle(
+                                      color: GameTheme.accentGold,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                        ],
+                      ),
+                    );
+                  }(),
 
                   // Expanded Section
                   if (isExpanded) ...[

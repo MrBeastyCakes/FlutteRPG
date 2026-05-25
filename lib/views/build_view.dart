@@ -69,6 +69,21 @@ class _BuildViewState extends State<BuildView> {
         .where((s) => s.zoneId == currentZone.id && !s.isRuined)
         .toList();
 
+    // Trail Cook perk: dynamic virtual field kitchen in any zone
+    final hasTrailCook = engine.skillSubSpecs[SkillType.cooking] == 'cooking_trailcook';
+    if (hasTrailCook) {
+      final virtualTrailKitchen = StationInstance(
+        zoneId: currentZone.id,
+        stationId: 'field_kitchen',
+        tier: 1,
+        isRuined: false,
+        queue: [],
+      );
+      if (!builtOperationalStations.any((s) => s.stationId == 'field_kitchen')) {
+        builtOperationalStations.add(virtualTrailKitchen);
+      }
+    }
+
     return Container(
       color: GameTheme.background,
       child: Column(
@@ -620,13 +635,16 @@ class _BuildViewState extends State<BuildView> {
   }
 
   Widget _buildEmptyRecipesPlaceholder() {
-    return const Center(
+    final isSaltPress = _selectedStationId == 'salt_press';
+    return Center(
       child: Padding(
-        padding: EdgeInsets.all(24.0),
+        padding: const EdgeInsets.all(24.0),
         child: Text(
-          'No recipes match the active filters.\nTry enabling "Show Locked" or clearing search query.',
+          isSaltPress
+              ? 'No recipes available yet. (Future content)'
+              : 'No recipes match the active filters.\nTry enabling "Show Locked" or clearing search query.',
           textAlign: TextAlign.center,
-          style: TextStyle(color: GameTheme.textMuted, fontSize: 12, height: 1.4),
+          style: const TextStyle(color: GameTheme.textMuted, fontSize: 12, height: 1.4),
         ),
       ),
     );
@@ -1050,10 +1068,12 @@ class _BuildViewState extends State<BuildView> {
                             color: GameTheme.cardBg,
                             borderRadius: BorderRadius.circular(10),
                           ),
-                          child: const Center(
+                          child: Center(
                             child: Text(
-                              'Station is currently idle.',
-                              style: TextStyle(color: GameTheme.textMuted, fontSize: 12, fontStyle: FontStyle.italic),
+                              _selectedStationId == 'salt_press'
+                                  ? 'Idle — no recipes to queue.'
+                                  : 'Station is currently idle.',
+                              style: const TextStyle(color: GameTheme.textMuted, fontSize: 12, fontStyle: FontStyle.italic),
                             ),
                           ),
                         ),

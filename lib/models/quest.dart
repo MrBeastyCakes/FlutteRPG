@@ -1,5 +1,6 @@
 import 'skill.dart';
 import 'crafted_item.dart';
+import 'codex.dart';
 
 enum QuestType { main, side, daily }
 enum QuestStatus { available, active, completed, turnedIn }
@@ -21,14 +22,18 @@ enum ObjectiveKind {
 class QuestObjective {
   final ObjectiveKind kind;
   final String? targetId;       // itemId, beastId, recipeId, zoneId, stationId, skillType.name, etc.
+  final String? targetTag;      // tag-filter for codexRead objectives (Spec 2)
   final int targetCount;
   int currentCount;
+  bool comingSoon;              // true marks Spec 5/6-dependent objectives
 
   QuestObjective({
     required this.kind,
     this.targetId,
+    this.targetTag,
     required this.targetCount,
     this.currentCount = 0,
+    this.comingSoon = false,
   });
 
   bool get isComplete => currentCount >= targetCount;
@@ -41,6 +46,7 @@ enum RewardKind {
   blueprint,        // a blueprint scroll (Spec 2)
   worldEvent,       // fires a milestone World Event by id
   unlock,           // generic engine-flag unlock keyed by targetId
+  offerQuest,       // automatically offers a next quest by id (Spec 2)
 }
 
 class QuestReward {
@@ -131,4 +137,21 @@ class CodexFragmentReadEvent extends QuestEvent {
 class ScoutCompletedEvent extends QuestEvent {
   final String actionId;
   const ScoutCompletedEvent(this.actionId) : super(1);
+}
+
+class CustomQuestEvent extends QuestEvent {
+  final String eventId;
+  const CustomQuestEvent(this.eventId, [int count = 1]) : super(count);
+}
+
+class PuzzleResult {
+  final CodexTag tag;
+  final List<bool> correctness;
+  final CodexReading? reading;
+
+  const PuzzleResult({
+    required this.tag,
+    required this.correctness,
+    this.reading,
+  });
 }

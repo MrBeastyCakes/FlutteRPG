@@ -8,7 +8,9 @@ import 'views/skills_view.dart';
 import 'views/inventory_view.dart';
 import 'views/build_view.dart';
 import 'models/item.dart';
+import 'models/masterwork.dart';
 import 'widgets/floating_notification.dart';
+import 'widgets/narrative_event_modal.dart';
 
 import 'views/codex_view.dart';
 import 'widgets/world_event_widgets.dart';
@@ -32,7 +34,9 @@ class MyApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: GameTheme.themeData,
       home: const WorldEventListener(
-        child: MainGameShell(),
+        child: NarrativeEventListener(
+          child: MainGameShell(),
+        ),
       ),
       routes: {
         '/codex': (context) => const CodexView(),
@@ -220,226 +224,56 @@ class _MainGameShellState extends State<MainGameShell> {
     final step = runState.currentStep;
     final task = runState.task;
 
-    return Center(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // 1. TRIAL LOGO & TITLE
-            Container(
-              decoration: GameTheme.glassCardDecoration(
-                customBg: GameTheme.healthRed.withOpacity(0.08),
-              ),
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                children: [
-                  const Icon(
-                    Icons.workspace_premium,
-                    color: GameTheme.healthRed,
-                    size: 40,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    task.title.toUpperCase(),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 1.2,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '${task.skillType.name} Limit Break Challenge (Lvl ${task.levelGate})',
-                    style: const TextStyle(
-                      color: GameTheme.healthRed,
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
+    return NarrativeEventModal(
+      title: task.title.toUpperCase(),
+      prompt: step.prompt,
+      variant: NarrativeEventVariant.masterwork,
+      onAbandon: () {
+        engine.cancelMasterwork();
+      },
+      choices: [
+        for (final option in step.options)
+          _buildMasterworkChoice(engine, option),
+      ],
+    );
+  }
 
-            // 2. SCENARIO PROMPT
-            Container(
-              decoration: GameTheme.glassCardDecoration(),
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'SITUATION:',
-                    style: TextStyle(
-                      color: GameTheme.textMuted,
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 1.0,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    step.prompt,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 14,
-                      height: 1.5,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
+  NarrativeEventChoice _buildMasterworkChoice(GameEngine engine, MasterworkOption option) {
+    final hasSkill = option.requiredSkill == null ||
+        (engine.skills[option.requiredSkill!]?.level ?? 0) >= option.requiredLevel;
+    final hasItems = option.requiredItemId == null ||
+        engine.inventory.hasItem(option.requiredItemId!, option.requiredItemCount);
+    final hasEnergy = engine.playerStats.currentEnergy >= option.energyCost;
+    final hasGold = engine.playerStats.gold >= option.goldCost;
 
-            // 3. OPTIONS HEADER
-            const Padding(
-              padding: EdgeInsets.only(left: 4.0, bottom: 8.0),
-              child: Text(
-                'YOUR ACTIONS:',
-                style: TextStyle(
-                  color: GameTheme.accentGold,
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 1.0,
-                ),
-              ),
-            ),
+    final isLocked = !hasSkill || !hasItems || !hasEnergy || !hasGold;
 
-            // 4. ACTION OPTIONS
-            ...step.options.map((option) {
-              // Check option requirements
-              final hasSkill = option.requiredSkill == null ||
-                  (engine.skills[option.requiredSkill!]?.level ?? 0) >= option.requiredLevel;
-              final hasItems = option.requiredItemId == null ||
-                  engine.inventory.hasItem(option.requiredItemId!, option.requiredItemCount);
-              final hasEnergy = engine.playerStats.currentEnergy >= option.energyCost;
-              final hasGold = engine.playerStats.gold >= option.goldCost;
+    // Build description requirements text
+    List<String> reqTexts = [];
+    if (option.requiredSkill != null) {
+      reqTexts.add('${option.requiredSkill!.name} Lvl ${option.requiredLevel}+');
+    }
+    if (option.requiredItemId != null) {
+      final item = Items.findById(option.requiredItemId!);
+      final itemName = item != null ? item.name : option.requiredItemId!;
+      reqTexts.add('Needs $itemName x${option.requiredItemCount}');
+    }
+    if (option.energyCost > 0) {
+      reqTexts.add('Costs ${option.energyCost} Energy');
+    }
+    if (option.goldCost > 0) {
+      reqTexts.add('Costs ${option.goldCost} Gold');
+    }
 
-              final isLocked = !hasSkill || !hasItems || !hasEnergy || !hasGold;
+    final preview = reqTexts.isEmpty ? null : reqTexts.join(', ');
 
-              // Build description requirements text
-              List<String> reqTexts = [];
-              if (option.requiredSkill != null) {
-                reqTexts.add('${option.requiredSkill!.name} Lvl ${option.requiredLevel}+');
-              }
-              if (option.requiredItemId != null) {
-                final item = Items.findById(option.requiredItemId!);
-                final itemName = item != null ? item.name : option.requiredItemId!;
-                reqTexts.add('Needs $itemName x${option.requiredItemCount}');
-              }
-              if (option.energyCost > 0) {
-                reqTexts.add('Costs ${option.energyCost} Energy');
-              }
-              if (option.goldCost > 0) {
-                reqTexts.add('Costs ${option.goldCost} Gold');
-              }
-
-              return Card(
-                color: isLocked ? const Color(0xFF161C23) : const Color(0xFF222C37),
-                margin: const EdgeInsets.only(bottom: 10),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  side: BorderSide(
-                    color: isLocked ? GameTheme.border.withOpacity(0.3) : GameTheme.border,
-                    width: 1,
-                  ),
-                ),
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(10),
-                  onTap: isLocked
-                      ? null
-                      : () {
-                          engine.chooseMasterworkOption(option);
-                        },
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 12.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Icon(
-                              isLocked ? Icons.lock : Icons.play_arrow_rounded,
-                              size: 16,
-                              color: isLocked ? GameTheme.textMuted : GameTheme.accentGold,
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                option.text,
-                                style: TextStyle(
-                                  color: isLocked ? GameTheme.textMuted : Colors.white,
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.bold,
-                                  decoration: isLocked ? TextDecoration.none : null,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        if (reqTexts.isNotEmpty) ...[
-                          const SizedBox(height: 6),
-                          Wrap(
-                            spacing: 8,
-                            children: reqTexts.map((req) {
-                              // Identify if this requirement is missing
-                              bool missing = false;
-                              if (req.contains('Lvl') && !hasSkill) missing = true;
-                              if (req.contains('Needs') && !hasItems) missing = true;
-                              if (req.contains('Energy') && !hasEnergy) missing = true;
-                              if (req.contains('Gold') && !hasGold) missing = true;
-
-                              return Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: missing
-                                      ? GameTheme.healthRed.withOpacity(0.12)
-                                      : const Color(0xFF16212D),
-                                  borderRadius: BorderRadius.circular(4),
-                                  border: Border.all(
-                                    color: missing ? GameTheme.healthRed : GameTheme.border,
-                                    width: 0.5,
-                                  ),
-                                ),
-                                child: Text(
-                                  req,
-                                  style: TextStyle(
-                                    color: missing ? GameTheme.healthRed : GameTheme.textMuted,
-                                    fontSize: 10,
-                                    fontWeight: missing ? FontWeight.bold : FontWeight.normal,
-                                  ),
-                                ),
-                              );
-                            }).toList(),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                ),
-              );
-            }).toList(),
-
-            const SizedBox(height: 16),
-
-            // 5. ABANDON BUTTON
-            OutlinedButton.icon(
-              style: OutlinedButton.styleFrom(
-                foregroundColor: GameTheme.textMuted,
-                side: const BorderSide(color: GameTheme.border, width: 1.5),
-                padding: const EdgeInsets.symmetric(vertical: 12),
-              ),
-              onPressed: () {
-                engine.cancelMasterwork();
-              },
-              icon: const Icon(Icons.logout),
-              label: const Text('Abandon Trial', style: TextStyle(fontWeight: FontWeight.bold)),
-            ),
-          ],
-        ),
-      ),
+    return NarrativeEventChoice(
+      label: option.text,
+      preview: preview,
+      isLocked: isLocked,
+      onTap: () {
+        engine.chooseMasterworkOption(option);
+      },
     );
   }
 }

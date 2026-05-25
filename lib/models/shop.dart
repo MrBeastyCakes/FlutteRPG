@@ -222,6 +222,10 @@ class Merchant {
       ShopListing(item: Items.wolfPelt, buyPrice: 35, sellPrice: 12, stock: 4, maxStock: 4, category: ShopCategory.supplies),
       ShopListing(item: Items.boarTusk, buyPrice: 14, sellPrice: 5, stock: 8, maxStock: 8, category: ShopCategory.supplies),
       ShopListing(item: Items.spiderSilk, buyPrice: 17, sellPrice: 6, stock: 8, maxStock: 8, category: ShopCategory.supplies),
+      ShopListing(item: Items.driftwood, buyPrice: 11, sellPrice: 3, stock: 15, maxStock: 15, category: ShopCategory.supplies),
+      ShopListing(item: Items.saltCrystal, buyPrice: 20, sellPrice: 5, stock: 8, maxStock: 8, category: ShopCategory.supplies),
+      ShopListing(item: Items.pearlShell, buyPrice: 31, sellPrice: 8, stock: 4, maxStock: 4, category: ShopCategory.supplies),
+      ShopListing(item: Items.kelp, buyPrice: 8, sellPrice: 2, stock: 12, maxStock: 12, category: ShopCategory.supplies),
       
       // Packs & Gear
       ShopListing(item: Items.leatherBackpack, buyPrice: 420, sellPrice: 150, stock: 1, maxStock: 1, category: ShopCategory.tools),

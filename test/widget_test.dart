@@ -1,8 +1,11 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_text_based_rpg/engine/game_engine.dart';
 import 'package:flutter_text_based_rpg/main.dart';
 import 'package:flutter_text_based_rpg/models/zone.dart';
+import 'package:flutter_text_based_rpg/models/codex.dart';
+import 'package:flutter_text_based_rpg/views/codex_puzzle_view.dart';
 
 void main() {
   testWidgets('Elaria RPG layout and tab switching smoke test', (WidgetTester tester) async {
@@ -95,5 +98,91 @@ void main() {
 
     // Verify the UI transitioned to Workshop view (e.g. shows subtab text)
     expect(find.text('CRAFT RECIPES'), findsOneWidget);
+  });
+
+  testWidgets('Codex Fragments Tab visibility, puzzle navigation, and reading display', (WidgetTester tester) async {
+    final engine = GameEngine();
+    engine.setEngineFlag('cartographers_tent');
+
+    await tester.pumpWidget(
+      ChangeNotifierProvider(
+        create: (_) => engine,
+        child: const MyApp(),
+      ),
+    );
+
+    // Tap on the 'Open Codex' button on the Dashboard
+    expect(find.text('Open Codex'), findsOneWidget);
+    await tester.ensureVisible(find.text('Open Codex'));
+    await tester.tap(find.text('Open Codex'));
+    await tester.pumpAndSettle();
+
+    // Verify Codex view is active
+    expect(find.text('QUESTS'), findsOneWidget);
+    expect(find.text('BEASTS'), findsOneWidget);
+    expect(find.text('REGIONS'), findsOneWidget);
+    
+    // Fragments tab is not visible yet since knownCodexFragmentIds is empty
+    expect(find.text('FRAGMENTS'), findsNothing);
+
+    // Close Codex
+    await tester.tap(find.byIcon(Icons.arrow_back));
+    await tester.pumpAndSettle();
+
+    // Artificially unlock 3 fragments from the Wilds tag
+    engine.tryDropFragment(CodexTag.wilds, 1.0);
+    engine.tryDropFragment(CodexTag.wilds, 1.0);
+    engine.tryDropFragment(CodexTag.wilds, 1.0);
+    await tester.pumpAndSettle();
+
+    // Tap Open Codex again
+    await tester.ensureVisible(find.text('Open Codex'));
+    await tester.tap(find.text('Open Codex'));
+    await tester.pumpAndSettle();
+
+    // The Fragments tab should now appear
+    expect(find.text('FRAGMENTS'), findsOneWidget);
+
+    // Tap on the 'FRAGMENTS' tab
+    await tester.tap(find.text('FRAGMENTS'));
+    await tester.pumpAndSettle();
+
+    // Check that the WILDS section is shown and has a count of 3/10
+    expect(find.textContaining('WILDS'), findsOneWidget);
+    expect(find.text('3/10'), findsOneWidget);
+
+    // Tap on the WILDS expansion tile to expand it
+    await tester.tap(find.textContaining('WILDS'));
+    await tester.pumpAndSettle();
+
+    // Verify that the "Solve Puzzle" button is shown (since count >= 3)
+    expect(find.text('Solve Puzzle'), findsOneWidget);
+
+    // Tap on "Solve Puzzle" to navigate to the CodexPuzzleView
+    await tester.tap(find.text('Solve Puzzle'));
+    await tester.pumpAndSettle();
+
+    // Now we should be on the CodexPuzzleView page
+    expect(find.textContaining('Order the Fragments'), findsOneWidget);
+    expect(find.text('Lock Sequence'), findsOneWidget);
+
+    // Verify list displays drag handles
+    expect(find.byIcon(Icons.drag_handle), findsNWidgets(3));
+
+    // Tap "Lock Sequence". Since we only have 3 of 10, the button should be disabled (onPressed is null)
+    final lockButton = tester.widget<ElevatedButton>(find.ancestor(
+      of: find.text('Lock Sequence'),
+      matching: find.byType(ElevatedButton),
+    ));
+    expect(lockButton.onPressed, isNull);
+
+    // Now let's go back
+    final puzzleFinder = find.byType(CodexPuzzleView);
+    expect(puzzleFinder, findsOneWidget);
+    Navigator.pop(tester.element(puzzleFinder));
+    await tester.pumpAndSettle();
+
+    // Verify we are back on Codex view
+    expect(find.text('FRAGMENTS'), findsOneWidget);
   });
 }

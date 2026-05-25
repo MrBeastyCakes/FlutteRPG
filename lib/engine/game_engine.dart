@@ -17,6 +17,10 @@ import '../models/shop.dart';
 import '../models/quest.dart';
 import '../models/codex.dart';
 import '../models/milestone.dart';
+import '../models/main_quests.dart';
+import '../models/weather.dart';
+import '../models/combat.dart';
+import '../models/random_event.dart';
 import 'activity_log.dart';
 
 class ActiveActionState {
@@ -29,6 +33,7 @@ class ActiveActionState {
   final String? targetZoneId;
   final double progress; // 0.0 to 1.0
   final double durationSeconds;
+  final Map<String, int>? consumedItems;
 
   const ActiveActionState({
     this.action,
@@ -40,6 +45,7 @@ class ActiveActionState {
     this.targetZoneId,
     required this.progress,
     required this.durationSeconds,
+    this.consumedItems,
   });
 
   ActiveActionState copyWith({
@@ -52,6 +58,7 @@ class ActiveActionState {
     String? targetZoneId,
     double? progress,
     double? durationSeconds,
+    Map<String, int>? consumedItems,
   }) {
     return ActiveActionState(
       action: action ?? this.action,
@@ -63,6 +70,7 @@ class ActiveActionState {
       targetZoneId: targetZoneId ?? this.targetZoneId,
       progress: progress ?? this.progress,
       durationSeconds: durationSeconds ?? this.durationSeconds,
+      consumedItems: consumedItems ?? this.consumedItems,
     );
   }
 }
@@ -72,12 +80,26 @@ class CombatState {
   final int beastCurrentHealth;
   final int playerStartHealth;
   final List<String> combatLog;
+  final List<CombatRound> roundHistory;
+  final int roundsSinceLastTelegraph;
+  final BeastTelegraph? activeTelegraph;
+  final PlayerStance? pendingStance;
+  final DateTime? roundDeadline;
+  final int? pendingQuickslotIndex;
+  final int currentRoundNumber;
 
   const CombatState({
     required this.beast,
     required this.beastCurrentHealth,
     required this.playerStartHealth,
     required this.combatLog,
+    this.roundHistory = const [],
+    this.roundsSinceLastTelegraph = 0,
+    this.activeTelegraph,
+    this.pendingStance,
+    this.roundDeadline,
+    this.pendingQuickslotIndex,
+    this.currentRoundNumber = 1,
   });
 
   CombatState copyWith({
@@ -85,12 +107,29 @@ class CombatState {
     int? beastCurrentHealth,
     int? playerStartHealth,
     List<String>? combatLog,
+    List<CombatRound>? roundHistory,
+    int? roundsSinceLastTelegraph,
+    BeastTelegraph? activeTelegraph,
+    bool clearActiveTelegraph = false,
+    PlayerStance? pendingStance,
+    bool clearPendingStance = false,
+    DateTime? roundDeadline,
+    int? pendingQuickslotIndex,
+    bool clearPendingQuickslotIndex = false,
+    int? currentRoundNumber,
   }) {
     return CombatState(
       beast: beast ?? this.beast,
       beastCurrentHealth: beastCurrentHealth ?? this.beastCurrentHealth,
       playerStartHealth: playerStartHealth ?? this.playerStartHealth,
       combatLog: combatLog ?? this.combatLog,
+      roundHistory: roundHistory ?? this.roundHistory,
+      roundsSinceLastTelegraph: roundsSinceLastTelegraph ?? this.roundsSinceLastTelegraph,
+      activeTelegraph: clearActiveTelegraph ? null : (activeTelegraph ?? this.activeTelegraph),
+      pendingStance: clearPendingStance ? null : (pendingStance ?? this.pendingStance),
+      roundDeadline: roundDeadline ?? this.roundDeadline,
+      pendingQuickslotIndex: clearPendingQuickslotIndex ? null : (pendingQuickslotIndex ?? this.pendingQuickslotIndex),
+      currentRoundNumber: currentRoundNumber ?? this.currentRoundNumber,
     );
   }
 }
@@ -100,12 +139,14 @@ class QueuedCraft {
   int count; // remaining iterations
   final Map<int, String> slotChoices; // slotIndex -> chosen item id
   final String? modifierItemId;
+  final Map<String, int> consumedItems;
 
   QueuedCraft({
     required this.recipeId,
     required this.count,
     required this.slotChoices,
     this.modifierItemId,
+    required this.consumedItems,
   });
 }
 
@@ -209,6 +250,17 @@ class GameEngine extends ChangeNotifier {
   String? _activeTitleId;
   bool _isPaused = false;
 
+  final Set<String> _readCodexFragmentIds = {};
+  final Set<CodexTag> _solvedTagPuzzles = {};
+  final Map<CodexTag, int> _puzzleAttempts = {};
+  final StreamController<PuzzleResult> _puzzleResultController = StreamController<PuzzleResult>.broadcast();
+
+  final Map<String, int> _glyphUses = {};
+  int _pastryBuffActionsRemaining = 0;
+  String? _pastryBuffStat;
+  DateTime? _lastGardenTime;
+  DateTime? _lastGroveTime;
+
   PlayerStats _playerStats = PlayerStats.initial();
   Map<SkillType, SkillState> _skills = {};
   Inventory _inventory = Inventory.initial();
@@ -225,11 +277,31 @@ class GameEngine extends ChangeNotifier {
   ShopState _shopState = ShopState.initial();
   ShopState get shopState => _shopState;
 
+  CoastWeatherState _coastWeather = CoastWeatherState(
+    current: CoastWeather.calm,
+    nextRollAt: DateTime.now(),
+  );
+
+  CoastWeather get coastWeather => _coastWeather.current;
+  DateTime get nextWeatherRollAt => _coastWeather.nextRollAt;
+
   int _maxEquipmentSlots = 1;
   final Map<SkillType, InventorySlot> _equippedToolSlots = {};
   InventorySlot? _equippedWeaponSlot;
   InventorySlot? _equippedArmorSlot;
   CombatState? _activeCombat;
+  final List<String?> _quickslots = [null, null, null];
+  final Map<SkillType, String> _skillSpecs = {};
+  final Map<SkillType, String> _skillSubSpecs = {};
+  ActiveRandomEventState? _activeRandomEvent;
+  final StreamController<RandomEvent> _randomEventStream = StreamController<RandomEvent>.broadcast();
+
+  ActiveRandomEventState? get activeRandomEvent => _activeRandomEvent;
+  Stream<RandomEvent> get randomEvents => _randomEventStream.stream;
+
+  List<String?> get quickslots => List.unmodifiable(_quickslots);
+  Map<SkillType, String> get skillSpecs => Map.unmodifiable(_skillSpecs);
+  Map<SkillType, String> get skillSubSpecs => Map.unmodifiable(_skillSubSpecs);
 
   ActiveActionState? _playerAction;
   Timer? _globalTimer;
@@ -357,6 +429,18 @@ class GameEngine extends ChangeNotifier {
     final combatSkill = _skills[SkillType.combat];
     if (combatSkill != null && combatSkill.levelCap > 10) {
       base += 1;
+    }
+    // Guardian Spec: +1 Defense
+    if (_skillSpecs[SkillType.combat] == 'combat_guardian') {
+      base += 1;
+    }
+    // Bastion Subspec: +3 Defense
+    if (_skillSubSpecs[SkillType.combat] == 'combat_bastion') {
+      base += 3;
+    }
+    // Pastrycook defense buff: +2 Defense
+    if (_pastryBuffActionsRemaining > 0 && _pastryBuffStat == 'defense') {
+      base += 2;
     }
     return base;
   }
@@ -556,6 +640,34 @@ class GameEngine extends ChangeNotifier {
   String? get activeTitleId => _activeTitleId;
   bool get isPaused => _isPaused;
 
+  Set<String> get readCodexFragmentIds => Set.unmodifiable(_readCodexFragmentIds);
+  Set<CodexTag> get solvedTagPuzzles => Set.unmodifiable(_solvedTagPuzzles);
+  Stream<PuzzleResult> get puzzleResults => _puzzleResultController.stream;
+  Map<CodexTag, int> get puzzleAttempts => Map.unmodifiable(_puzzleAttempts);
+
+  void setEngineFlag(String flag) {
+    if (!_engineFlags.contains(flag)) {
+      _engineFlags.add(flag);
+      _checkMilestones();
+      notifyListeners();
+    }
+  }
+
+  bool isActionVisible(ZoneAction action) {
+    if (action.id == 'walk_eastern_coastal_path') {
+      return _engineFlags.contains('breaches_concept_known');
+    }
+    if (action.id == 'wharfmaster_travel') {
+      return _engineFlags.contains('wharfmaster_pier_visible');
+    }
+    return true;
+  }
+
+
+  void advanceQuestObjective(String targetId, {int amount = 1}) {
+    _notifyQuestObservers(CustomQuestEvent(targetId, amount));
+  }
+
 
   List<Recipe> getAvailableRecipes() {
     return [
@@ -615,6 +727,14 @@ class GameEngine extends ChangeNotifier {
       log("You cannot travel to ${zone.name} yet! It is locked.", LogType.error);
       return;
     }
+
+    _maybeRollCoastWeather();
+    final isCoastZone = zone.id == 'sundered_coast_1' || zone.id == 'sundered_coast_2' || zone.id == 'sundered_coast_3';
+    if (isCoastZone && _coastWeather.current == CoastWeather.stormSwell) {
+      log("The Wharfmaster shakes his head. 'No travel today. The seas have swallowed the pier.'", LogType.error);
+      return;
+    }
+
     
     // Stop current action
     cancelAction();
@@ -664,6 +784,11 @@ class GameEngine extends ChangeNotifier {
     if (toolSlot != null) {
       bonus += getItemSpeedBonus(toolSlot.item, toolSlot.quality, toolSlot.affixIds);
     }
+
+    if (_pastryBuffActionsRemaining > 0 && _pastryBuffStat == 'speed') {
+      bonus += 0.10;
+    }
+
     return bonus;
   }
 
@@ -678,6 +803,11 @@ class GameEngine extends ChangeNotifier {
     if (toolSlot != null) {
       bonus += getItemSuccessBonus(toolSlot.item, toolSlot.quality, toolSlot.affixIds);
     }
+
+    if (_pastryBuffActionsRemaining > 0 && _pastryBuffStat == 'success') {
+      bonus += 0.05;
+    }
+
     return bonus;
   }
 
@@ -740,11 +870,47 @@ class GameEngine extends ChangeNotifier {
 
   // Timer Tick Action
   void startAction(ZoneAction action) {
+    // Cooldown check for Wildflower Garden
+    if (action.id == 'wildflower_garden') {
+      if (_lastGardenTime != null) {
+        final elapsed = DateTime.now().difference(_lastGardenTime!);
+        final cooldown = const Duration(minutes: 10);
+        if (elapsed < cooldown) {
+          final remaining = cooldown - elapsed;
+          log("Your garden is recovering. Please wait ${remaining.inMinutes}m ${remaining.inSeconds % 60}s.", LogType.warning);
+          return;
+        }
+      }
+    }
+
+    // Cooldown check for Examine Grove
+    if (action.id == 'examine_grove') {
+      if (_lastGroveTime != null) {
+        final elapsed = DateTime.now().difference(_lastGroveTime!);
+        final cooldown = Duration(minutes: _skillSubSpecs[SkillType.woodcutting] == 'woodcutting_sapling_mender' ? 5 : 10);
+        if (elapsed < cooldown) {
+          final remaining = cooldown - elapsed;
+          log("The grove is recovering. Please wait ${remaining.inMinutes}m ${remaining.inSeconds % 60}s.", LogType.warning);
+          return;
+        }
+      }
+    }
+
+    // Weather restrictions
+    if (action.id == 'dive_pearl_shell' || action.id == 'dredge_pearl_bed') {
+      _maybeRollCoastWeather();
+      if (_coastWeather.current != CoastWeather.calm) {
+        log("The pools churn. Wait for the seas to settle.", LogType.error);
+        return;
+      }
+    }
+
     // 0. Combat specific health check
     if (action.isCombat && _playerStats.currentHealth <= 0) {
       log("You are too weak to fight! Rest at the Town Inn or eat food.", LogType.error);
       return;
     }
+
 
     // 1. Skill requirement check
     if (action.requiredSkill != null) {
@@ -791,6 +957,13 @@ class GameEngine extends ChangeNotifier {
         beastCurrentHealth: beast.maxHealth,
         playerStartHealth: _playerStats.currentHealth,
         combatLog: ["Tracked down ${beast.icon} ${beast.name}!"],
+        roundHistory: const [],
+        roundsSinceLastTelegraph: 0,
+        activeTelegraph: null,
+        pendingStance: null,
+        roundDeadline: DateTime.now().add(Duration(milliseconds: combatRoundDurationMs)),
+        pendingQuickslotIndex: null,
+        currentRoundNumber: 1,
       );
     }
 
@@ -813,8 +986,31 @@ class GameEngine extends ChangeNotifier {
     } else {
       duration = duration / (1.0 + speedBonus);
       duration = duration / _currentZone.speedModifier;
+
+      // Sub-specialization speed multipliers
+      if (action.requiredSkill == SkillType.woodcutting) {
+        if (_skillSubSpecs[SkillType.woodcutting] == 'woodcutting_clearcutter') {
+          duration *= 1.4;
+        } else if (_skillSubSpecs[SkillType.woodcutting] == 'woodcutting_speedchopper') {
+          duration *= 0.6;
+        }
+      }
+      if (action.requiredSkill == SkillType.herbalism) {
+        if (_skillSubSpecs[SkillType.herbalism] == 'herbalism_bloomseer') {
+          duration *= 0.75;
+        }
+      }
+
+      // Wayfinding Path-Mapper: instant scout in already-scouted zones
+      if (_skillSubSpecs[SkillType.wayfinding] == 'wayfinding_path_mapper') {
+        if (action.id == 'scout_cliff_path' && _unlockedZoneIds.contains('sundered_coast_2')) {
+          duration = 0.05;
+        } else if (action.id == 'scout_lighthouse_path' && _unlockedZoneIds.contains('sundered_coast_3')) {
+          duration = 0.05;
+        }
+      }
     }
-    if (duration < 1.0) duration = 1.0;
+    if (duration < 1.0 && duration != 0.05) duration = 1.0;
 
     _playerAction = ActiveActionState(
       action: action,
@@ -939,29 +1135,12 @@ class GameEngine extends ChangeNotifier {
     }
 
     // Verify materials and reserve them
-    final Map<String, int> reservation = {};
-    for (int i = 0; i < recipe.slots.length; i++) {
-      final slot = recipe.slots[i];
-      final choiceItemId = slotChoices[i] ?? slot.acceptedItems.first.itemId;
-      reservation[choiceItemId] = (reservation[choiceItemId] ?? 0) + slot.quantity * count;
+    if (!hasInputsForRecipe(recipe, slotChoices, modifierItemId: modifierItemId, count: count)) {
+      log("Not enough ingredients!", LogType.error);
+      return;
     }
 
-    if (modifierItemId != null) {
-      reservation[modifierItemId] = (reservation[modifierItemId] ?? 0) + count;
-    }
-
-    for (var entry in reservation.entries) {
-      if (!_inventory.hasItem(entry.key, entry.value)) {
-        final item = Items.findById(entry.key);
-        log("Not enough ingredients! Missing: ${item?.name ?? entry.key} x${entry.value}.", LogType.error);
-        return;
-      }
-    }
-
-    // Consume (reserve) from inventory
-    for (var entry in reservation.entries) {
-      _inventory = _inventory.removeItem(entry.key, entry.value);
-    }
+    final consumed = consumeInputsForRecipe(recipe, slotChoices, modifierItemId: modifierItemId, count: count);
 
     // Add to queue
     final entry = QueuedCraft(
@@ -969,6 +1148,7 @@ class GameEngine extends ChangeNotifier {
       count: count,
       slotChoices: slotChoices,
       modifierItemId: modifierItemId,
+      consumedItems: consumed,
     );
     instance.queue.add(entry);
 
@@ -989,20 +1169,8 @@ class GameEngine extends ChangeNotifier {
     final recipe = Recipes.findById(entry.recipeId);
     if (recipe == null) return;
 
-    // Calculate refund
-    final Map<String, int> refund = {};
-    for (int i = 0; i < recipe.slots.length; i++) {
-      final slot = recipe.slots[i];
-      final choiceItemId = entry.slotChoices[i] ?? slot.acceptedItems.first.itemId;
-      refund[choiceItemId] = (refund[choiceItemId] ?? 0) + slot.quantity * entry.count;
-    }
-
-    if (entry.modifierItemId != null) {
-      refund[entry.modifierItemId!] = (refund[entry.modifierItemId!] ?? 0) + entry.count;
-    }
-
     // Refund to inventory
-    for (var refundEntry in refund.entries) {
+    for (var refundEntry in entry.consumedItems.entries) {
       final item = Items.findById(refundEntry.key);
       if (item != null) {
         _inventory = _inventory.addItem(item, refundEntry.value);
@@ -1044,6 +1212,7 @@ class GameEngine extends ChangeNotifier {
       recipe: recipe,
       progress: 0.0,
       durationSeconds: duration,
+      consumedItems: queued.consumedItems,
     );
     notifyListeners();
   }
@@ -1348,6 +1517,10 @@ class GameEngine extends ChangeNotifier {
 
         recordBestiary(beast.id, drops);
         _notifyQuestObservers(BeastDefeatedEvent(beast.id));
+        final regionTag = _regionTagForBeast(beast.id);
+        if (regionTag != null) {
+          tryDropFragment(regionTag, 0.08);
+        }
       }
 
       if (doubleLoot && !inventoryFullError) {
@@ -1454,9 +1627,14 @@ class GameEngine extends ChangeNotifier {
     );
 
     // Roll hazard / damage
-    if (action.healthCost > 0 && action.hazardChance > 0) {
+    bool isWildWalkerHerbalism = action.requiredSkill == SkillType.herbalism && _skillSpecs[SkillType.herbalism] == 'herbalism_wild_walker';
+    if (action.healthCost > 0 && action.hazardChance > 0 && !isWildWalkerHerbalism) {
+      double hazardChance = action.hazardChance;
+      if (action.requiredSkill == SkillType.mining && _skillSubSpecs[SkillType.mining] == 'mining_tunnel_caller') {
+        hazardChance *= 0.50;
+      }
       final roll = _random.nextDouble();
-      if (roll <= action.hazardChance) {
+      if (roll <= hazardChance) {
         int damage = action.healthCost;
         int newHealth = max(0, _playerStats.currentHealth - damage);
         _playerStats = _playerStats.copyWith(currentHealth: newHealth);
@@ -1555,6 +1733,80 @@ class GameEngine extends ChangeNotifier {
       }
     }
 
+    // Handle Custom Specialization Actions: Wildflower Garden & Examine Grove
+    if (action.id == 'wildflower_garden') {
+      _lastGardenTime = DateTime.now();
+      final qty = 1 + _random.nextInt(2);
+      if (!_inventory.isFull) {
+        _inventory = _inventory.addItem(Items.wildflower, qty);
+        log("Gathered: 🌸 Wildflowers x$qty", LogType.success);
+        _lootController.add(LootEvent(Items.wildflower.icon, Items.wildflower.name));
+        _notifyQuestObservers(ItemGatheredEvent(Items.wildflower.id, qty));
+      }
+      
+      if (_skillSubSpecs[SkillType.herbalism] == 'herbalism_botanist') {
+        if (!_inventory.isFull) {
+          _inventory = _inventory.addItem(Items.wildBerries, 1);
+          log("Gathered: 🍓 Wild Berries x1", LogType.success);
+          _lootController.add(LootEvent(Items.wildBerries.icon, Items.wildBerries.name));
+          _notifyQuestObservers(ItemGatheredEvent(Items.wildBerries.id, 1));
+        }
+      }
+      
+      if (_skillSubSpecs[SkillType.herbalism] == 'herbalism_hedge_witch') {
+        if (_random.nextDouble() <= 0.10 && !_inventory.isFull) {
+          _inventory = _inventory.addItem(Items.nightshade, 1);
+          log("Gathered: 🌿 Nightshade x1", LogType.success);
+          _lootController.add(LootEvent(Items.nightshade.icon, Items.nightshade.name));
+          _notifyQuestObservers(ItemGatheredEvent(Items.nightshade.id, 1));
+        }
+      }
+    }
+
+    if (action.id == 'examine_grove') {
+      _lastGroveTime = DateTime.now();
+      final isHeartwoodReader = _skillSubSpecs[SkillType.woodcutting] == 'woodcutting_heartwood_reader';
+      if (isHeartwoodReader && _random.nextDouble() <= 0.10) {
+        if (!_inventory.isFull) {
+          _inventory = _inventory.addItem(Items.heartwood, 1);
+          log("Gathered: 🪵 Heartwood x1", LogType.success);
+          _lootController.add(LootEvent(Items.heartwood.icon, Items.heartwood.name));
+          _notifyQuestObservers(ItemGatheredEvent(Items.heartwood.id, 1));
+        }
+      } else {
+        final logItem = _random.nextBool() ? Items.oakLog : Items.willowLog;
+        if (!_inventory.isFull) {
+          _inventory = _inventory.addItem(logItem, 1);
+          log("Gathered: ${logItem.icon} ${logItem.name} x1", LogType.success);
+          _lootController.add(LootEvent(logItem.icon, logItem.name));
+          _notifyQuestObservers(ItemGatheredEvent(logItem.id, 1));
+        }
+      }
+    }
+
+    // Mining Vein Hunter: +20% chance for a hidden ore per mining action
+    if (action.requiredSkill == SkillType.mining && _skillSubSpecs[SkillType.mining] == 'mining_vein_hunter') {
+      if (_random.nextDouble() <= 0.20) {
+        const ores = ['iron_ore', 'gold_ore', 'darkstone_ore', 'coal'];
+        final randomOreId = ores[_random.nextInt(ores.length)];
+        final randomOre = Items.findById(randomOreId);
+        if (randomOre != null && !_inventory.isFull) {
+          _inventory = _inventory.addItem(randomOre, 1);
+          log("🔍 Vein Hunter! You discovered a hidden ${randomOre.name}!", LogType.success);
+          _lootController.add(LootEvent(randomOre.icon, randomOre.name));
+          _notifyQuestObservers(ItemGatheredEvent(randomOre.id, 1));
+        }
+      }
+    }
+
+    // Pastrycook Buff decrease
+    if (_pastryBuffActionsRemaining > 0) {
+      _pastryBuffActionsRemaining--;
+      if (_pastryBuffActionsRemaining == 0) {
+        log("🍰 Pastrycook Perk: Your pastry buff has worn off.", LogType.info);
+      }
+    }
+
     for (var loot in action.lootTable) {
       final roll = _random.nextDouble();
       double finalChance = loot.chance + successBonus + _currentZone.successModifier;
@@ -1562,11 +1814,54 @@ class GameEngine extends ChangeNotifier {
         finalChance = finalChance - 0.30;
         if (finalChance < 0.10) finalChance = 0.10;
       }
+
+      // Mining Prospector: +50% rare ore drop (gold, iron, darkstone)
+      if (action.requiredSkill == SkillType.mining && _skillSpecs[SkillType.mining] == 'mining_prospector') {
+        final isRareOre = loot.item.id == 'gold_ore' || loot.item.id == 'darkstone_ore' || loot.item.id == 'iron_ore';
+        if (isRareOre) {
+          finalChance += loot.chance * 0.50;
+        }
+      }
+
+      // Herbalism Wild-Walker: +50% rare herb chance (nightshade)
+      if (action.requiredSkill == SkillType.herbalism && _skillSpecs[SkillType.herbalism] == 'herbalism_wild_walker') {
+        if (loot.item.id == 'nightshade') {
+          finalChance += loot.chance * 0.50;
+        }
+      }
+
       if (roll <= finalChance) {
         int qty = loot.minQuantity;
         if (loot.maxQuantity > loot.minQuantity) {
           qty = loot.minQuantity + _random.nextInt(loot.maxQuantity - loot.minQuantity + 1);
         }
+
+        // Specialization yield multipliers
+        if (action.requiredSkill == SkillType.woodcutting) {
+          if (_skillSpecs[SkillType.woodcutting] == 'woodcutting_logger') {
+            qty = (qty * 1.3).round();
+            if (_random.nextDouble() <= 0.20) {
+              qty *= 2;
+              log("🪓 Logger Cleaving Strike! You felled two trees at once!", LogType.success);
+            }
+          }
+          if (_skillSubSpecs[SkillType.woodcutting] == 'woodcutting_clearcutter') {
+            qty = (qty * 1.5).round();
+          }
+        } else if (action.requiredSkill == SkillType.mining) {
+          if (_skillSpecs[SkillType.mining] == 'mining_prospector') {
+            qty = (qty * 1.3).round();
+            if (_random.nextDouble() <= 0.20) {
+              qty *= 2;
+              log("⛏️ Double Vein! You uncovered a rich vein!", LogType.success);
+            }
+          }
+        } else if (action.requiredSkill == SkillType.herbalism) {
+          if (loot.item.id == 'nightshade' && _skillSubSpecs[SkillType.herbalism] == 'herbalism_poison_picker') {
+            qty += 1;
+          }
+        }
+
         if (doubleYield) {
           qty *= 2;
         }
@@ -1754,9 +2049,84 @@ class GameEngine extends ChangeNotifier {
       }
     }
 
+    // Spec 3 Coast unlocks
+    if (action.id == 'walk_eastern_coastal_path') {
+      if (!_engineFlags.contains('coast_unlocked')) {
+        _engineFlags.add('coast_unlocked');
+        _engineFlags.add('wharfmaster_pier_visible');
+        _unlockedZoneIds.add('sundered_coast_1');
+        log("🗺️ New Zone Discovered: Sundered Coast I!", LogType.success);
+        _checkMilestones();
+        offerQuest(MainQuests.investigateTide());
+      }
+    }
+    if (action.id == 'wharfmaster_travel') {
+      travelTo(Zones.sunderedCoastTier1);
+    }
+    if (action.id == 'scout_cliff_path') {
+      unlockZone('sundered_coast_2');
+    }
+    if (action.id == 'scout_lighthouse_path') {
+      unlockZone('sundered_coast_3');
+    }
+    if (action.id == 'approach_lamp_room') {
+      log("Something stirs in the shadows of the lamp room... (Echo encounters deferred)", LogType.warning);
+    }
+
+    // Fragment drops by action id
+    if (action.id == 'inspect_obelisk') {
+      tryDropFragment(CodexTag.wilds, 0.10);
+      tryDropFragment(CodexTag.oldEmpire, 0.01);
+    }
+    if (action.id == 'inspect_glyph') {
+      tryDropFragment(CodexTag.stone, 0.10);
+      tryDropFragment(CodexTag.oldEmpire, 0.01);
+    }
+    if (action.id == 'explore_forest_paths' || action.id == 'explore_deep_woods') {
+      tryDropFragment(CodexTag.wilds, 0.05);
+    }
+    if (action.id == 'explore_rocky_trails' || action.id == 'explore_lower_shafts') {
+      tryDropFragment(CodexTag.stone, 0.05);
+    }
+    // Spec 3 Coast drops
+    if (action.id == 'inspect_pier_glyph') {
+      tryDropFragment(CodexTag.tide, 0.10);
+      tryDropFragment(CodexTag.oldEmpire, 0.01);
+    }
+    if (action.id == 'inspect_wharf_glyph') {
+      tryDropFragment(CodexTag.tide, 0.10);
+      tryDropFragment(CodexTag.oldEmpire, 0.02);
+    }
+    if (action.id == 'read_lighthouse_plaque') {
+      tryDropFragment(CodexTag.tide, 0.15);
+      tryDropFragment(CodexTag.oldEmpire, 0.03);
+    }
+    if (action.id == 'walk_eastern_coastal_path') {
+      tryDropFragment(CodexTag.tide, 0.20);
+    }
+    if (action.id == 'scout_cliff_path') {
+      tryDropFragment(CodexTag.tide, 0.05);
+    }
+    if (action.id == 'scout_lighthouse_path') {
+      tryDropFragment(CodexTag.tide, 0.05);
+    }
+
+    // Tier-3 gathering — Source pool gate prevents firing until first_breach_cleansed
+    if (_currentZone.tier >= 3 && !action.isCombat) {
+      tryDropFragment(CodexTag.source, 0.03);
+    }
+
     rollBlueprintScrollDrop(_currentZone.tier);
     _playerAction = null;
     notifyListeners();
+
+    if (!action.isCombat) {
+      _maybeFireRandomEvent(action);
+    }
+
+    if (_activeRandomEvent != null) {
+      return;
+    }
 
     // Auto-repeat zone action if possible
     startAction(action);
@@ -1855,27 +2225,53 @@ class GameEngine extends ChangeNotifier {
           log("🍳 Master Culinarian Perk! Output doubled!", LogType.success);
         }
       }
+      if (instance.stationId == 'smelter') {
+        if (_skillSpecs[SkillType.mining] == 'mining_refiner') {
+          finalQty += 1;
+        }
+        if (_skillSubSpecs[SkillType.mining] == 'mining_smelt_master') {
+          finalQty *= 2;
+        }
+      }
 
       final skillLevel = oldSkill.level;
       final stationBias = getStationQualityBias(instance.tier);
       
       double substituteBias = 0.0;
       bool hasBelowCanonical = false;
-      for (int i = 0; i < recipe.slots.length; i++) {
-        final slot = recipe.slots[i];
-        final choiceItemId = slotChoices[i] ?? slot.acceptedItems.first.itemId;
-        final choiceIdx = slot.acceptedItems.indexWhere((c) => c.itemId == choiceItemId);
-        if (choiceIdx >= 0) {
-          final choice = slot.acceptedItems[choiceIdx];
-          substituteBias += choice.qualityBias;
-          if (choice.qualityBias < 0.0) {
-            hasBelowCanonical = true;
+      final consumed = instance.currentCraft!.consumedItems;
+      if (consumed != null) {
+        substituteBias = calculateRecipeQualityBias(recipe, consumed);
+        final tempConsumed = Map<String, int>.from(consumed);
+        for (final slot in recipe.slots) {
+          for (final choice in slot.acceptedItems) {
+            if (choice.qualityBias < 0.0) {
+              final available = tempConsumed[choice.itemId] ?? 0;
+              if (available > 0) {
+                hasBelowCanonical = true;
+                break;
+              }
+            }
+          }
+        }
+      } else {
+        for (int i = 0; i < recipe.slots.length; i++) {
+          final slot = recipe.slots[i];
+          final choiceItemId = slotChoices[i] ?? slot.acceptedItems.first.itemId;
+          final choiceIdx = slot.acceptedItems.indexWhere((c) => c.itemId == choiceItemId);
+          if (choiceIdx >= 0) {
+            final choice = slot.acceptedItems[choiceIdx];
+            substituteBias += choice.qualityBias;
+            if (choice.qualityBias < 0.0) {
+              hasBelowCanonical = true;
+            }
           }
         }
       }
 
       final roll = _random.nextDouble();
-      double qualityScore = roll + 0.020 * (skillLevel - recipe.requiredLevel) + stationBias + substituteBias;
+      double specBias = _getSpecCraftQualityBias(recipe, resultItem, instance.stationId);
+      double qualityScore = roll + 0.020 * (skillLevel - recipe.requiredLevel) + stationBias + substituteBias + specBias;
       if (hasBelowCanonical) {
         qualityScore -= 0.10;
       }
@@ -1895,6 +2291,12 @@ class GameEngine extends ChangeNotifier {
       var affixes = rollAffixes(quality, resultItem.type);
       if (modifierItemId == 'nightshade' && affixes.isEmpty) {
         affixes = rollAffixesForced(resultItem.type);
+      }
+      if (_skillSubSpecs[SkillType.cooking] == 'cooking_brewmaster' &&
+          recipe.requiredSkill == SkillType.cooking &&
+          instance.stationId == 'field_kitchen' &&
+          instance.zoneId == 'town_square') {
+        affixes = List<String>.from(affixes)..add('brewmaster_aged');
       }
 
       if (_inventory.isFull) {
@@ -1934,7 +2336,16 @@ class GameEngine extends ChangeNotifier {
 
   void _tick() {
     if (_isPaused) return;
+
+    // Check combat round timer
+    if (_activeCombat != null &&
+        _activeCombat!.roundDeadline != null &&
+        DateTime.now().isAfter(_activeCombat!.roundDeadline!)) {
+      _onRoundTimerExpired();
+    }
+
     _checkMilestones();
+    _maybeRollCoastWeather();
 
     bool stateChanged = false;
 
@@ -1942,24 +2353,12 @@ class GameEngine extends ChangeNotifier {
     if (_playerAction != null) {
       final state = _playerAction!;
       if (state.action != null && state.action!.isCombat) {
-        double nextProgress = state.progress + (0.1 / state.durationSeconds);
-        if (nextProgress >= 1.0) {
-          if (_activeCombat != null) {
-            _executeCombatRound(state.action!);
-            if (_activeCombat!.beastCurrentHealth <= 0) {
-              _playerAction = state.copyWith(progress: 1.0);
-              _completePlayerAction();
-            } else if (_playerStats.currentHealth <= 0) {
-              faint();
-            } else {
-              _playerAction = state.copyWith(progress: 0.0);
-            }
-          } else {
-            _playerAction = state.copyWith(progress: 1.0);
-            _completePlayerAction();
-          }
-        } else {
-          _playerAction = state.copyWith(progress: nextProgress);
+        if (_activeCombat != null && _activeCombat!.roundDeadline != null) {
+          final remaining = _activeCombat!.roundDeadline!.difference(DateTime.now());
+          final maxMs = combatRoundDurationMs;
+          final pct = (1.0 - (remaining.inMilliseconds.clamp(0, maxMs) / maxMs.toDouble())).clamp(0.0, 1.0);
+          _playerAction = state.copyWith(progress: pct);
+          stateChanged = true;
         }
       } else {
         double nextProgress = state.progress + (0.1 / state.durationSeconds);
@@ -2045,7 +2444,33 @@ class GameEngine extends ChangeNotifier {
     final affs = affixIds ?? const [];
     if (!_inventory.hasItem(item.id, 1)) return;
 
-    _inventory = _inventory.removeItem(item.id, 1, quality, affs);
+    // Glyph-Carver & Rune-Weaver glyph uses
+    int totalAllowedUses = 1;
+    if (item.id.contains('glyph')) {
+      if (_skillSpecs[SkillType.lore] == 'lore_glyph_carver') {
+        totalAllowedUses += 1;
+      }
+      if (_skillSubSpecs[SkillType.lore] == 'lore_rune_weaver') {
+        totalAllowedUses += 1;
+      }
+    }
+
+    bool shouldRemove = true;
+    if (item.id.contains('glyph') && totalAllowedUses > 1) {
+      final key = "${item.id}_${quality?.name}_${affs.join(',')}";
+      final currentUses = _glyphUses[key] ?? 0;
+      if (currentUses < totalAllowedUses - 1) {
+        _glyphUses[key] = currentUses + 1;
+        shouldRemove = false;
+        log("Runic preservation: ${item.name} has ${totalAllowedUses - 1 - currentUses} uses remaining.", LogType.info);
+      } else {
+        _glyphUses[key] = 0; // reset
+      }
+    }
+
+    if (shouldRemove) {
+      _inventory = _inventory.removeItem(item.id, 1, quality, affs);
+    }
 
     // Apply cooking skill restoration multiplier
     final cookingSkill = _skills[SkillType.cooking];
@@ -2063,6 +2488,17 @@ class GameEngine extends ChangeNotifier {
     int baseHeal = getItemHealAmount(item, quality, affs);
     int baseEnergy = getItemEnergyAmount(item, quality, affs);
 
+    // Lore Glyph-Carver: Glyph items +50% effect
+    if (item.id.contains('glyph') && _skillSpecs[SkillType.lore] == 'lore_glyph_carver') {
+      baseHeal = (baseHeal * 1.5).round();
+      baseEnergy = (baseEnergy * 1.5).round();
+    }
+
+    // Cooking Brewmaster: Foods crafted at Inn-only stations (with brewmaster_aged affix) also restore +30% energy
+    if (affs.contains('brewmaster_aged')) {
+      baseEnergy = (baseEnergy * 1.30).round();
+    }
+
     int healed = (baseHeal * foodMultiplier).round();
     int energyRestored = (baseEnergy * foodMultiplier).round();
 
@@ -2078,6 +2514,22 @@ class GameEngine extends ChangeNotifier {
       currentHealth: newHealth,
       currentEnergy: newEnergy,
     );
+
+    // Cooking Pastrycook perk: Gained random buff
+    if (_skillSubSpecs[SkillType.cooking] == 'cooking_pastrycook') {
+      _pastryBuffActionsRemaining = 3;
+      final rolled = _random.nextInt(3);
+      if (rolled == 0) {
+        _pastryBuffStat = 'speed';
+        log("🍰 Pastrycook Perk: Gained +10% action speed for 3 actions!", LogType.success);
+      } else if (rolled == 1) {
+        _pastryBuffStat = 'success';
+        log("🍰 Pastrycook Perk: Gained +5% success chance for 3 actions!", LogType.success);
+      } else {
+        _pastryBuffStat = 'defense';
+        log("🍰 Pastrycook Perk: Gained +2 Defense for 3 actions!", LogType.success);
+      }
+    }
 
     String flourish = affs.contains('plentiful') ? " (Double Bite!)" : "";
     String qualPrefix = quality != null ? "[${quality.name.toUpperCase()}] " : "";
@@ -2333,6 +2785,15 @@ class GameEngine extends ChangeNotifier {
         final newSkill = oldSkill.unlockCap();
         _skills[skillType] = newSkill;
 
+        if (option.specPath != null) {
+          _skillSpecs[skillType] = option.specPath!;
+          log("You have walked the ${_specDisplayName(option.specPath!)} path. Forevermore, your craft knows your name.", LogType.success);
+        }
+        if (option.subSpecPath != null) {
+          _skillSubSpecs[skillType] = option.subSpecPath!;
+          log("You have refined further into ${_subSpecDisplayName(option.subSpecPath!)}.", LogType.success);
+        }
+
         log("CONGRATULATIONS! You completed the '$taskTitle' Masterwork Trial!", LogType.levelUp);
         log("Your ${skillType.name} level cap is unlocked up to level ${newSkill.levelCap}!", LogType.levelUp);
         _notifyQuestObservers(MasterworkCompletedEvent(skillType));
@@ -2379,6 +2840,84 @@ class GameEngine extends ChangeNotifier {
     }
 
     notifyListeners();
+  }
+
+  void _maybeRollCoastWeather() {
+    if (DateTime.now().isBefore(_coastWeather.nextRollAt)) return;
+
+    final stormChance = _calculateStormChance();
+    const fogChance = 0.25;
+    final roll = _random.nextDouble();
+
+    final CoastWeather next;
+    if (roll < stormChance) {
+      next = CoastWeather.stormSwell;
+    } else if (roll < stormChance + fogChance) {
+      next = CoastWeather.seaFog;
+    } else {
+      next = CoastWeather.calm;
+    }
+
+    if (next != _coastWeather.current) {
+      log('Coast weather: ${_weatherDisplayName(next)}', LogType.info);
+    }
+    _coastWeather = CoastWeatherState(
+      current: next,
+      nextRollAt: DateTime.now().add(const Duration(minutes: 5)),
+    );
+    notifyListeners();
+  }
+
+  double _calculateStormChance() {
+    double chance = 0.05;
+    final breachTagsWithFragments = <CodexTag>{};
+    for (final id in _knownCodexFragmentIds) {
+      final f = CodexFragments.findById(id);
+      if (f != null && (f.tag == CodexTag.wilds || f.tag == CodexTag.stone || f.tag == CodexTag.tide)) {
+        breachTagsWithFragments.add(f.tag);
+      }
+    }
+    if (_engineFlags.contains('breach_wilds_cleansed')) breachTagsWithFragments.remove(CodexTag.wilds);
+    if (_engineFlags.contains('breach_stone_cleansed')) breachTagsWithFragments.remove(CodexTag.stone);
+    if (_engineFlags.contains('breach_tide_cleansed')) breachTagsWithFragments.remove(CodexTag.tide);
+    chance += breachTagsWithFragments.length * 0.05;
+    return chance.clamp(0.0, 0.50);
+  }
+
+  String _weatherDisplayName(CoastWeather weather) {
+    switch (weather) {
+      case CoastWeather.calm:
+        return '🌤️ Calm';
+      case CoastWeather.seaFog:
+        return '🌫️ Sea Fog';
+      case CoastWeather.stormSwell:
+        return '⛈️ Storm Swell';
+    }
+  }
+
+  @visibleForTesting
+  void forceCoastWeatherForTest(CoastWeather weather) {
+    _coastWeather = CoastWeatherState(
+      current: weather,
+      nextRollAt: DateTime.now().add(const Duration(minutes: 5)),
+    );
+    notifyListeners();
+  }
+
+  @visibleForTesting
+  double calculateStormChancePublic() {
+    return _calculateStormChance();
+  }
+
+  @visibleForTesting
+  void completeScoutForTest(String actionId) {
+    final action = Zones.townSquare.actions.firstWhere((a) => a.id == actionId);
+    _playerAction = ActiveActionState(
+      action: action,
+      progress: 1.0,
+      durationSeconds: 1.0,
+    );
+    _completePlayerAction();
   }
 
   double getItemAttackPower(Item item, QualityTier? quality, List<String> affixIds) {
@@ -2516,6 +3055,58 @@ class GameEngine extends ChangeNotifier {
     return 0.00;
   }
 
+  int get combatRoundDurationMs {
+    int base = 2000;
+    if (_skillSubSpecs[SkillType.combat] == 'combat_skirmisher') {
+      base = (base / 1.25).round();
+    }
+    final combatSkill = _skills[SkillType.combat];
+    if (combatSkill != null && combatSkill.levelCap > 20) {
+      base = (base / 1.15).round();
+    }
+    return base;
+  }
+
+  double _getSpecCraftQualityBias(Recipe recipe, Item resultItem, String stationId) {
+    double bias = 0.0;
+    if (_skillSpecs[SkillType.crafting] == 'crafting_smith') {
+      if (resultItem.type == ItemType.weapon || resultItem.type == ItemType.armor) {
+        bias += 0.10;
+      }
+    }
+    if (_skillSubSpecs[SkillType.crafting] == 'crafting_weaponsmith') {
+      if (resultItem.type == ItemType.weapon) {
+        bias += 0.15;
+      }
+    }
+    if (_skillSubSpecs[SkillType.crafting] == 'crafting_armorsmith') {
+      if (resultItem.type == ItemType.armor) {
+        bias += 0.15;
+      }
+    }
+    if (_skillSpecs[SkillType.crafting] == 'crafting_tinker') {
+      if (resultItem.type == ItemType.tool) {
+        bias += 0.10;
+      }
+    }
+    if (_skillSubSpecs[SkillType.crafting] == 'crafting_toolmaker') {
+      if (resultItem.type == ItemType.tool) {
+        bias += 0.15;
+      }
+    }
+    if (_skillSpecs[SkillType.mining] == 'mining_refiner') {
+      if (stationId == 'smelter') {
+        bias += 0.10;
+      }
+    }
+    if (_skillSubSpecs[SkillType.mining] == 'mining_slag_cutter') {
+      if (stationId == 'smelter') {
+        bias += 0.15;
+      }
+    }
+    return bias;
+  }
+
   QualityTier rollQuality(double qualityScore) {
     if (qualityScore < 0.10) return QualityTier.crude;
     if (qualityScore < 0.65) return QualityTier.standard;
@@ -2575,6 +3166,14 @@ class GameEngine extends ChangeNotifier {
     _explorationProgress['explore_deep_woods'] = 0.0;
     _explorationProgress['explore_lower_shafts'] = 0.0;
 
+    _skillSpecs.clear();
+    _skillSubSpecs.clear();
+    _glyphUses.clear();
+    _pastryBuffActionsRemaining = 0;
+    _pastryBuffStat = null;
+    _lastGardenTime = null;
+    _lastGroveTime = null;
+
     // Re-initialize skills
     for (var type in SkillType.values) {
       _skills[type] = SkillState.initial(type);
@@ -2609,6 +3208,8 @@ class GameEngine extends ChangeNotifier {
   }
 
   bool _matches(QuestObjective objective, QuestEvent event) {
+    if (objective.comingSoon) return false;
+
     switch (objective.kind) {
       case ObjectiveKind.gather:
         return event is ItemGatheredEvent && event.itemId == objective.targetId;
@@ -2630,11 +3231,14 @@ class GameEngine extends ChangeNotifier {
       case ObjectiveKind.masterwork:
         return event is MasterworkCompletedEvent && event.skill.name == objective.targetId;
       case ObjectiveKind.codexRead:
-        return event is CodexFragmentReadEvent;
+        if (event is! CodexFragmentReadEvent) return false;
+        if (objective.targetTag == null) return true;
+        final fragment = CodexFragments.findById(event.fragmentId);
+        return fragment != null && fragment.tag.name == objective.targetTag;
       case ObjectiveKind.cleanse:
         return false; // Not implemented in Spec 1
       case ObjectiveKind.custom:
-        return false;
+        return event is CustomQuestEvent && event.eventId == objective.targetId;
     }
   }
 
@@ -2663,7 +3267,7 @@ class GameEngine extends ChangeNotifier {
         break;
       case RewardKind.skillXp:
         if (reward.targetId != null) {
-          final skillType = SkillType.values.firstWhere((s) => s.name == reward.targetId);
+          final skillType = SkillType.values.firstWhere((s) => s.name.toLowerCase() == reward.targetId?.toLowerCase());
           final oldSkill = _skills[skillType]!;
           final newSkill = oldSkill.addXp(reward.amount.toDouble() * getXpMultiplier());
           _skills[skillType] = newSkill;
@@ -2710,6 +3314,12 @@ class GameEngine extends ChangeNotifier {
       case RewardKind.unlock:
         if (reward.targetId != null) {
           _engineFlags.add(reward.targetId!);
+        }
+        break;
+      case RewardKind.offerQuest:
+        if (reward.targetId != null) {
+          final next = MainQuests.findById(reward.targetId!);
+          if (next != null) offerQuest(next);
         }
         break;
     }
@@ -2797,33 +3407,125 @@ class GameEngine extends ChangeNotifier {
       ],
       turnInLocation: null,
     ));
+
+    offerQuest(MainQuests.discoverSickness());
   }
 
   void _maybeOfferMasterworkQuest(SkillType skill) {
-    final questId = 'side_masterwork_${skill.name.toLowerCase()}';
-    if (_activeQuests.any((q) => q.id == questId)) return;
-    if (_completedQuests.any((q) => q.id == questId)) return;
-
     final state = _skills[skill]!;
     if (state.level < state.levelCap) return;
 
-    final task = MasterworkTasks.findForSkill(skill, state.levelCap);
-    if (task == null) return;
+    if (state.levelCap == 10) {
+      final questId = 'side_masterwork_${skill.name.toLowerCase()}';
+      if (_activeQuests.any((q) => q.id == questId)) return;
+      if (_completedQuests.any((q) => q.id == questId)) return;
 
-    offerQuest(Quest(
-      id: questId,
-      type: QuestType.side,
-      title: 'Skill Trial: ${task.title}',
-      description: task.description,
-      objectives: [
-        QuestObjective(kind: ObjectiveKind.masterwork, targetId: skill.name, targetCount: 1),
-      ],
-      rewards: [
-        QuestReward(kind: RewardKind.skillXp, targetId: skill.name, amount: 50),
-        QuestReward(kind: RewardKind.gold, amount: 25),
-      ],
-      turnInLocation: null,
-    ));
+      final task = MasterworkTasks.findForSkill(skill, 10);
+      if (task == null) return;
+
+      offerQuest(Quest(
+        id: questId,
+        type: QuestType.side,
+        title: 'Skill Trial: ${task.title}',
+        description: task.description,
+        objectives: [
+          QuestObjective(kind: ObjectiveKind.masterwork, targetId: skill.name, targetCount: 1),
+        ],
+        rewards: [
+          QuestReward(kind: RewardKind.skillXp, targetId: skill.name, amount: 50),
+          QuestReward(kind: RewardKind.gold, amount: 25),
+        ],
+        turnInLocation: null,
+      ));
+    } else if (state.levelCap == 20) {
+      final spec = _skillSpecs[skill];
+      if (spec == null) return;
+
+      final questId = 'task_lvl20_$spec';
+      if (_activeQuests.any((q) => q.id == questId)) return;
+      if (_completedQuests.any((q) => q.id == questId)) return;
+
+      final task = MasterworkTasks.findForSkill(skill, 20, spec);
+      if (task == null) return;
+
+      offerQuest(Quest(
+        id: questId,
+        type: QuestType.side,
+        title: 'Specialization: ${task.title}',
+        description: task.description,
+        objectives: [
+          QuestObjective(kind: ObjectiveKind.masterwork, targetId: skill.name, targetCount: 1),
+        ],
+        rewards: [
+          QuestReward(kind: RewardKind.skillXp, targetId: skill.name, amount: 100),
+          QuestReward(kind: RewardKind.gold, amount: 50),
+        ],
+        turnInLocation: null,
+      ));
+    }
+  }
+
+  String _specDisplayName(String path) {
+    const names = {
+      'combat_berserker': 'Berserker', 'combat_guardian': 'Guardian',
+      'crafting_smith': 'Smith', 'crafting_tinker': 'Tinker',
+      'cooking_innkeeper': 'Innkeeper', 'cooking_field_chef': 'Field-Chef',
+      'herbalism_garden_keeper': 'Garden-Keeper', 'herbalism_wild_walker': 'Wild-Walker',
+      'woodcutting_logger': 'Logger', 'woodcutting_arborist': 'Arborist',
+      'mining_prospector': 'Prospector', 'mining_refiner': 'Refiner',
+      'wayfinding_cartographer': 'Cartographer', 'wayfinding_tracker': 'Tracker',
+      'lore_loremaster': 'Loremaster', 'lore_glyph_carver': 'Glyph-Carver',
+    };
+    return names[path] ?? path;
+  }
+
+  String _subSpecDisplayName(String path) {
+    const names = {
+      'combat_skirmisher': 'Skirmisher', 'combat_reaper': 'Reaper',
+      'combat_bastion': 'Bastion', 'combat_sentinel': 'Sentinel',
+      'crafting_weaponsmith': 'Weaponsmith', 'crafting_armorsmith': 'Armorsmith',
+      'crafting_toolmaker': 'Toolmaker', 'crafting_backpacker': 'Backpacker',
+      'cooking_brewmaster': 'Brewmaster', 'cooking_pastrycook': 'Pastrycook',
+      'cooking_trailcook': 'Trailcook', 'cooking_stewmaster': 'Stewmaster',
+      'herbalism_botanist': 'Botanist', 'herbalism_hedge_witch': 'Hedge-Witch',
+      'herbalism_poison_picker': 'Poison-Picker', 'herbalism_bloomseer': 'Bloomseer',
+      'woodcutting_clearcutter': 'Clearcutter', 'woodcutting_speedchopper': 'Speedchopper',
+      'woodcutting_sapling_mender': 'Sapling-Mender', 'woodcutting_heartwood_reader': 'Heartwood-Reader',
+      'mining_vein_hunter': 'Vein-Hunter', 'mining_tunnel_caller': 'Tunnel-Caller',
+      'mining_smelt_master': 'Smelt-Master', 'mining_slag_cutter': 'Slag-Cutter',
+      'wayfinding_sea_reader': 'Sea-Reader', 'wayfinding_path_mapper': 'Path-Mapper',
+      'wayfinding_beast_lurer': 'Beast-Lurer', 'wayfinding_spoor_reader': 'Spoor-Reader',
+      'lore_polymath': 'Polymath', 'lore_translator': 'Translator',
+      'lore_rune_weaver': 'Rune-Weaver', 'lore_engraver': 'Engraver',
+    };
+    return names[path] ?? path;
+  }
+
+  String specDisplayName(String path) => _specDisplayName(path);
+  String subSpecDisplayName(String path) => _subSpecDisplayName(path);
+  String specDisplayNameForTest(String path) => _specDisplayName(path);
+  String subSpecDisplayNameForTest(String path) => _subSpecDisplayName(path);
+
+  @visibleForTesting
+  void maybeOfferLvl20MasterworkForTest(SkillType s) => _maybeOfferMasterworkQuest(s);
+
+  @visibleForTesting
+  void completeMasterworkForTest(String taskId, {String? specPath, String? subSpecPath}) {
+    final task = MasterworkTasks.findById(taskId);
+    if (task == null) return;
+    _skills[task.skillType] = _skills[task.skillType]!.unlockCap();
+    if (specPath != null) {
+      _skillSpecs[task.skillType] = specPath;
+    }
+    if (subSpecPath != null) {
+      _skillSubSpecs[task.skillType] = subSpecPath;
+    }
+    notifyListeners();
+  }
+
+  @visibleForTesting
+  void setCraftingLevelForTest(int level) {
+    _skills[SkillType.crafting] = _skills[SkillType.crafting]!.copyWith(level: level);
   }
 
   void recordBestiary(String beastId, List<String> droppedItemIds) {
@@ -2852,11 +3554,781 @@ class GameEngine extends ChangeNotifier {
   }
 
   void readCodexFragment(String fragmentId) {
-    if (_knownCodexFragmentIds.contains(fragmentId)) return;
-    _knownCodexFragmentIds.add(fragmentId);
-    log("You read a new Codex Fragment: ${CodexFragments.findById(fragmentId)?.title ?? fragmentId}", LogType.info);
-    _notifyQuestObservers(CodexFragmentReadEvent(fragmentId));
+    if (!_knownCodexFragmentIds.contains(fragmentId)) return;
+    final alreadyRead = _readCodexFragmentIds.contains(fragmentId);
+    _readCodexFragmentIds.add(fragmentId);
+
+    if (!alreadyRead) {
+      final fragment = CodexFragments.findById(fragmentId)!;
+      final skillType = SkillType.lore;
+      final oldSkill = _skills[skillType]!;
+      final newSkill = oldSkill.addXp(15.0 * getXpMultiplier());
+      _skills[skillType] = newSkill;
+      log("Read Codex Fragment: ${fragment.title} (+15 Lore XP)", LogType.success);
+      if (newSkill.level > oldSkill.level) {
+        log("Level Up! Your ${skillType.name} is now Level ${newSkill.level}!", LogType.levelUp);
+        _levelUpController.add(LevelUpEvent(skillType, newSkill.level));
+      }
+      _maybeOfferMasterworkQuest(skillType);
+      
+      _notifyQuestObservers(CodexFragmentReadEvent(fragmentId));
+      _checkMilestones();
+    }
     notifyListeners();
+  }
+
+  void tryDropFragment(CodexTag tag, double chance) {
+    if (!_isFragmentPoolOpen(tag)) return;
+    if (_random.nextDouble() > chance) return;
+    final eligible = CodexFragments.all
+        .where((f) => f.tag == tag && !_knownCodexFragmentIds.contains(f.id))
+        .toList();
+    if (eligible.isEmpty) return;
+    final fragment = eligible[_random.nextInt(eligible.length)];
+    _grantFragment(fragment);
+  }
+
+  bool _isFragmentPoolOpen(CodexTag tag) {
+    switch (tag) {
+      case CodexTag.wilds:
+        return true;
+      case CodexTag.stone:
+        return _regionStatus.containsKey('darkstone_mine_1');
+      case CodexTag.tide:
+        return _engineFlags.contains('coast_unlocked');
+      case CodexTag.source:
+        return _engineFlags.contains('first_breach_cleansed');
+      case CodexTag.oldEmpire:
+        return true;
+      case CodexTag.misc:
+        return true;
+    }
+  }
+
+  void _grantFragment(CodexFragment fragment) {
+    _knownCodexFragmentIds.add(fragment.id);
+    log("📜 Codex Fragment found: ${fragment.title}", LogType.success);
+    _checkMilestones();
+    notifyListeners();
+  }
+
+  CodexTag? _regionTagForBeast(String beastId) {
+    switch (beastId) {
+      case 'forest_boar':
+      case 'shadow_wolf':
+        return CodexTag.wilds;
+      case 'cave_spider':
+      case 'cavern_troll':
+        return CodexTag.stone;
+      case 'tide_hound':
+      case 'brine_crawler':
+      case 'salt_touched_drowned':
+        return CodexTag.tide;
+      default:
+        return null;
+    }
+  }
+
+  @visibleForTesting
+  CodexTag? regionTagForBeastPublic(String beastId) {
+    return _regionTagForBeast(beastId);
+  }
+
+  void lockCodexPuzzle(CodexTag tag, List<String> orderedFragmentIds) {
+    final expected = CodexFragments.all
+        .where((f) => f.tag == tag)
+        .toList()
+      ..sort((a, b) => a.orderInTag.compareTo(b.orderInTag));
+
+    if (orderedFragmentIds.length != expected.length) return;
+
+    final correctness = <bool>[];
+    for (var i = 0; i < orderedFragmentIds.length; i++) {
+      correctness.add(orderedFragmentIds[i] == expected[i].id);
+    }
+    final allCorrect = correctness.every((c) => c);
+
+    if (allCorrect) {
+      if (_solvedTagPuzzles.contains(tag)) return;
+      _solvedTagPuzzles.add(tag);
+      _engineFlags.add('puzzle_${tag.name}_solved');
+      final reading = CodexReadings.forTag(tag);
+      if (reading != null) {
+        for (var r in reading.rewards) _grantReward(r);
+      }
+      log("✨ Puzzle solved: ${tag.name} — Reading unlocked.", LogType.success);
+      _puzzleResultController.add(
+        PuzzleResult(tag: tag, correctness: correctness, reading: reading),
+      );
+      advanceQuestObjective('puzzle_${tag.name}_solved');
+      _checkMilestones();
+    } else {
+      _puzzleAttempts[tag] = (_puzzleAttempts[tag] ?? 0) + 1;
+      final loreSkill = _skills[SkillType.lore]!;
+      final newXp = (loreSkill.xp - 3.0).clamp(0.0, double.infinity);
+      _skills[SkillType.lore] = loreSkill.copyWith(xp: newXp);
+      final correctCount = correctness.where((c) => c).length;
+      log(
+        "Puzzle attempt failed (−3 Lore XP). $correctCount of ${correctness.length} in place.",
+        LogType.info,
+      );
+      _puzzleResultController.add(
+        PuzzleResult(tag: tag, correctness: correctness, reading: null),
+      );
+    }
+    notifyListeners();
+  }
+
+  // Combat Stance & Turn Resolution APIs
+  void setCombatStance(PlayerStance stance, {int? quickslotIndex}) {
+    if (_activeCombat == null || _activeCombat!.pendingStance != null) return;
+    final cost = _stanceCost(stance);
+    if (_playerStats.currentEnergy < cost) {
+      log("Not enough energy for that action.", LogType.warning);
+      return;
+    }
+    _playerStats = _playerStats.copyWith(
+      currentEnergy: _playerStats.currentEnergy - cost,
+    );
+    _activeCombat = _activeCombat!.copyWith(
+      pendingStance: stance,
+      pendingQuickslotIndex: quickslotIndex,
+    );
+    notifyListeners();
+    _resolveCombatRound();
+  }
+
+  int _stanceCost(PlayerStance s) {
+    switch (s) {
+      case PlayerStance.strike: return 0;
+      case PlayerStance.heavyStrike:
+        return (_skillSpecs[SkillType.combat] == 'combat_berserker') ? 4
+            : (_skillSpecs[SkillType.combat] == 'combat_guardian') ? 8
+            : 5;
+      case PlayerStance.defend: return 2;
+      case PlayerStance.readTells: return 3;
+      case PlayerStance.item: return 0;
+    }
+  }
+
+  int getStanceCost(PlayerStance s) => _stanceCost(s);
+
+  void _resolveCombatRound() {
+    if (_activeCombat == null || _activeCombat!.pendingStance == null) return;
+    final state = _activeCombat!;
+    final beast = state.beast;
+    final stance = state.pendingStance!;
+
+    int playerDmgDealt = 0;
+    int playerDmgTaken = 0;
+    bool wasCrit = false;
+
+    // Determine telegraph state
+    final hasActiveTelegraph = state.activeTelegraph != null;
+
+    final updatedLog = List<String>.from(state.combatLog);
+
+    // Resolve based on stance
+    switch (stance) {
+      case PlayerStance.strike:
+      case PlayerStance.heavyStrike:
+        // Player deals damage
+        int baseDmg = getPlayerAttack() - beast.defense;
+        if (baseDmg < 1) baseDmg = 1;
+        // Apply random variance
+        final variance = 0.85 + _random.nextDouble() * 0.30;
+        baseDmg = (baseDmg * variance).round();
+        if (baseDmg < 1) baseDmg = 1;
+
+        double dmgMultiplier = 1.0;
+        if (stance == PlayerStance.heavyStrike) {
+          final isBerserker = _skillSpecs[SkillType.combat] == 'combat_berserker';
+          dmgMultiplier = isBerserker ? 1.8 : 1.5;
+        }
+        // Sea Fog crit
+        double critChance = 0.0;
+        if (_currentZone.id.startsWith('sundered_coast_') &&
+            _coastWeather.current == CoastWeather.seaFog) {
+          critChance += 0.20;
+        }
+        if (_skillSubSpecs[SkillType.combat] == 'combat_reaper') {
+          critChance += 0.15;
+        }
+        wasCrit = _random.nextDouble() < critChance;
+        if (wasCrit) {
+          final isReaper = _skillSubSpecs[SkillType.combat] == 'combat_reaper';
+          dmgMultiplier *= isReaper ? 2.5 : 1.5;
+        }
+
+        playerDmgDealt = (baseDmg * dmgMultiplier).round();
+        if (playerDmgDealt < 1) playerDmgDealt = 1;
+
+        if (wasCrit) {
+          updatedLog.add("⚡ Critical Strike! You hit ${beast.name} for $playerDmgDealt damage!");
+          log("⚡ Critical Strike! $playerDmgDealt damage", LogType.success);
+        } else {
+          updatedLog.add("⚔️ You strike ${beast.name} for $playerDmgDealt damage!");
+        }
+
+        // Heavy Strike: beast acts first
+        if (stance == PlayerStance.heavyStrike) {
+          playerDmgTaken = _calculateBeastDamage(beast, hasActiveTelegraph);
+          updatedLog.add("${beast.icon} ${beast.name} strikes you for $playerDmgTaken damage!");
+        }
+        // Apply player damage to beast
+        final newBeastHp = (state.beastCurrentHealth - playerDmgDealt).clamp(0, beast.maxHealth);
+        // Apply beast damage to player (if not Heavy Strike, beast acts after)
+        if (stance != PlayerStance.heavyStrike) {
+          playerDmgTaken = _calculateBeastDamage(beast, hasActiveTelegraph);
+          updatedLog.add("${beast.icon} ${beast.name} strikes you for $playerDmgTaken damage!");
+        }
+        _playerStats = _playerStats.copyWith(
+          currentHealth: (_playerStats.currentHealth - playerDmgTaken).clamp(0, _playerStats.maxHealth),
+        );
+        _activeCombat = state.copyWith(
+          beastCurrentHealth: newBeastHp,
+          clearPendingStance: true,
+          combatLog: updatedLog,
+          currentRoundNumber: state.currentRoundNumber + 1,
+          roundsSinceLastTelegraph: hasActiveTelegraph ? 0 : state.roundsSinceLastTelegraph + 1,
+          clearActiveTelegraph: true,
+          roundHistory: [
+            ...state.roundHistory,
+            CombatRound(
+              roundNumber: state.currentRoundNumber,
+              chosenStance: stance,
+              playerDamageDealt: playerDmgDealt,
+              playerDamageTaken: playerDmgTaken,
+              wasCrit: wasCrit,
+            ),
+          ],
+          roundDeadline: DateTime.now().add(Duration(milliseconds: combatRoundDurationMs)),
+        );
+        break;
+
+      case PlayerStance.defend:
+        // Halve incoming damage
+        int incoming = _calculateBeastDamage(beast, hasActiveTelegraph);
+        incoming = (incoming / 2).floor();
+        if (incoming < 1) incoming = 1;
+        // Counter damage (Guardian spec only)
+        final isGuardian = _skillSpecs[SkillType.combat] == 'combat_guardian';
+        final isSentinel = _skillSubSpecs[SkillType.combat] == 'combat_sentinel';
+        int counter = 0;
+        if (isGuardian) counter = isSentinel ? 10 : 5;
+
+        updatedLog.add("🛡️ You defend! Incoming damage halved: $incoming taken.");
+        if (counter > 0) {
+          updatedLog.add("🛡️ Guardian Counter! You deal $counter damage to ${beast.name}!");
+        }
+        updatedLog.add("${beast.icon} ${beast.name} strikes you for $incoming damage!");
+
+        int healAmt = 0;
+        if (_skillSubSpecs[SkillType.combat] == 'combat_bastion') {
+          healAmt = 5;
+          updatedLog.add("🛡️ Bastion Defense! You regenerate $healAmt HP!");
+        }
+
+        _playerStats = _playerStats.copyWith(
+          currentHealth: (_playerStats.currentHealth - incoming + healAmt).clamp(0, _playerStats.maxHealth),
+        );
+        final newBeastHp = (state.beastCurrentHealth - counter).clamp(0, beast.maxHealth);
+        _activeCombat = state.copyWith(
+          beastCurrentHealth: newBeastHp,
+          clearPendingStance: true,
+          combatLog: updatedLog,
+          currentRoundNumber: state.currentRoundNumber + 1,
+          roundsSinceLastTelegraph: hasActiveTelegraph ? 0 : state.roundsSinceLastTelegraph + 1,
+          clearActiveTelegraph: true,
+          roundDeadline: DateTime.now().add(Duration(milliseconds: combatRoundDurationMs)),
+          roundHistory: [
+            ...state.roundHistory,
+            CombatRound(
+              roundNumber: state.currentRoundNumber,
+              chosenStance: stance,
+              playerDamageDealt: counter,
+              playerDamageTaken: incoming,
+              wasCrit: false,
+            ),
+          ],
+        );
+        break;
+
+      case PlayerStance.readTells:
+        // No damage; reveal next telegraph
+        final updatedTelegraph = state.activeTelegraph != null
+            ? BeastTelegraph(
+                abilityId: state.activeTelegraph!.abilityId,
+                text: state.activeTelegraph!.text,
+                reveal: true,
+              )
+            : null;
+        updatedLog.add("👁️ You read the tells of ${beast.name}.");
+        if (updatedTelegraph != null) {
+          updatedLog.add("👁️ Glimpsed: ${beast.name} preparing ${updatedTelegraph.abilityId}!");
+        } else {
+          updatedLog.add("👁️ No active ability telegraphed.");
+        }
+        _activeCombat = state.copyWith(
+          clearPendingStance: true,
+          combatLog: updatedLog,
+          currentRoundNumber: state.currentRoundNumber + 1,
+          activeTelegraph: updatedTelegraph,
+          roundDeadline: DateTime.now().add(Duration(milliseconds: combatRoundDurationMs)),
+          roundHistory: [
+            ...state.roundHistory,
+            CombatRound(
+              roundNumber: state.currentRoundNumber,
+              chosenStance: stance,
+              playerDamageDealt: 0,
+              playerDamageTaken: 0,
+              wasCrit: false,
+            ),
+          ],
+        );
+        break;
+
+      case PlayerStance.item:
+        // Consume Quick-Slot item
+        final idx = state.pendingQuickslotIndex;
+        if (idx != null && idx >= 0 && idx < _quickslots.length) {
+          final itemId = _quickslots[idx];
+          if (itemId != null) {
+            final item = Items.findById(itemId);
+            if (item != null) {
+              _playerStats = _playerStats.copyWith(
+                currentHealth: (_playerStats.currentHealth + item.healAmount).clamp(0, _playerStats.maxHealth),
+                currentEnergy: (_playerStats.currentEnergy + item.energyAmount).clamp(0, _playerStats.maxEnergy),
+              );
+              _quickslots[idx] = null;
+              updatedLog.add("🎒 Used ${item.icon} ${item.name}: +${item.healAmount} HP, +${item.energyAmount} energy.");
+              log("Used ${item.icon} ${item.name}: +${item.healAmount} HP, +${item.energyAmount} energy.", LogType.success);
+            }
+          }
+        }
+        // Beast still acts
+        int incoming = _calculateBeastDamage(beast, hasActiveTelegraph);
+        updatedLog.add("${beast.icon} ${beast.name} strikes you for $incoming damage!");
+        _playerStats = _playerStats.copyWith(
+          currentHealth: (_playerStats.currentHealth - incoming).clamp(0, _playerStats.maxHealth),
+        );
+        _activeCombat = state.copyWith(
+          clearPendingStance: true,
+          clearPendingQuickslotIndex: true,
+          combatLog: updatedLog,
+          currentRoundNumber: state.currentRoundNumber + 1,
+          roundsSinceLastTelegraph: hasActiveTelegraph ? 0 : state.roundsSinceLastTelegraph + 1,
+          clearActiveTelegraph: true,
+          roundDeadline: DateTime.now().add(Duration(milliseconds: combatRoundDurationMs)),
+          roundHistory: [
+            ...state.roundHistory,
+            CombatRound(
+              roundNumber: state.currentRoundNumber,
+              chosenStance: stance,
+              playerDamageDealt: 0,
+              playerDamageTaken: incoming,
+              wasCrit: false,
+            ),
+          ],
+        );
+        break;
+    }
+
+    // Check end conditions
+    if (_activeCombat!.beastCurrentHealth <= 0) {
+      updatedLog.add("🎉 ${beast.name} has been defeated!");
+      _activeCombat = _activeCombat!.copyWith(combatLog: updatedLog);
+      _onBeastDefeated(beast);
+      return;
+    }
+    if (_playerStats.currentHealth <= 0) {
+      updatedLog.add("💀 You collapsed from your wounds...");
+      _activeCombat = _activeCombat!.copyWith(combatLog: updatedLog);
+      _onPlayerDefeated();
+      return;
+    }
+
+    // Check for telegraph fire next round
+    _maybeFireBeastTelegraph();
+    notifyListeners();
+  }
+
+  int _calculateBeastDamage(Beast beast, bool hasActiveTelegraph) {
+    int baseDmg = beast.attackPower - getPlayerDefense();
+    if (baseDmg < 1) baseDmg = 1;
+    // Apply random variance
+    final beastVariance = 0.85 + _random.nextDouble() * 0.30;
+    baseDmg = (baseDmg * beastVariance).round();
+    if (baseDmg < 1) baseDmg = 1;
+
+    // If a telegraph is active, this round IS the special — apply effect
+    if (hasActiveTelegraph) {
+      final ability = beast.ability;
+      if (ability != null) {
+        switch (ability.effect) {
+          case BeastSpecialEffect.bigHit: return baseDmg * 2;
+          case BeastSpecialEffect.bigHitStun: return baseDmg * 2;
+          default: return baseDmg;
+        }
+      }
+    }
+    return baseDmg;
+  }
+
+  void _maybeFireBeastTelegraph() {
+    if (_activeCombat == null) return;
+    final state = _activeCombat!;
+    final ability = state.beast.ability;
+    if (ability == null) return;
+    // Telegraph fires N-1 rounds in (so on round N, ability triggers)
+    if (state.roundsSinceLastTelegraph >= ability.cooldownRounds - 1) {
+      final wasRevealed = state.activeTelegraph?.reveal ?? false;
+      _activeCombat = state.copyWith(
+        activeTelegraph: BeastTelegraph(
+          abilityId: ability.id,
+          text: ability.telegraphText,
+          reveal: wasRevealed,
+        ),
+      );
+    }
+    notifyListeners();
+  }
+
+  void _onRoundTimerExpired() {
+    if (_activeCombat == null || _activeCombat!.pendingStance != null) return;
+    setCombatStance(PlayerStance.strike);
+  }
+
+  void _onBeastDefeated(Beast beast) {
+    if (_playerAction != null) {
+      _playerAction = _playerAction!.copyWith(progress: 1.0);
+      _completePlayerAction();
+    }
+  }
+
+  void _onPlayerDefeated() {
+    faint();
+  }
+
+  // Quick-Slot State Management APIs
+  void setQuickslot(int index, String? itemId) {
+    if (index < 0 || index >= 3) return;
+    if (itemId != null) {
+      final item = Items.findById(itemId);
+      if (item == null || item.type != ItemType.food) return;
+    }
+    _quickslots[index] = itemId;
+    notifyListeners();
+  }
+
+  void useQuickslot(int index) {
+    if (index < 0 || index >= 3) return;
+    final itemId = _quickslots[index];
+    if (itemId == null) return;
+
+    if (_activeCombat != null) {
+      setCombatStance(PlayerStance.item, quickslotIndex: index);
+    } else {
+      final item = Items.findById(itemId)!;
+      // Deduct item from inventory
+      if (!_inventory.hasItem(itemId, 1)) return;
+      _inventory = _inventory.removeItem(itemId, 1);
+
+      // Apply cooking multiplier if any (as in eatFood)
+      final cookingSkill = _skills[SkillType.cooking];
+      double foodMultiplier = 1.0;
+      if (cookingSkill != null) {
+        foodMultiplier += (cookingSkill.level - 1) * 0.015;
+        if (cookingSkill.levelCap > 10) foodMultiplier += 0.15;
+        if (cookingSkill.levelCap > 20) foodMultiplier += 0.30;
+      }
+      int healed = (item.healAmount * foodMultiplier).round();
+      int energyRestored = (item.energyAmount * foodMultiplier).round();
+
+      _playerStats = _playerStats.copyWith(
+        currentHealth: (_playerStats.currentHealth + healed).clamp(0, _playerStats.maxHealth),
+        currentEnergy: (_playerStats.currentEnergy + energyRestored).clamp(0, _playerStats.maxEnergy),
+      );
+      log("Used ${item.icon} ${item.name}: +$healed HP, +$energyRestored energy.", LogType.success);
+      _quickslots[index] = null;
+      notifyListeners();
+    }
+  }
+
+  // Specialization state helpers
+  String? specForSkill(SkillType s) => _skillSpecs[s];
+  String? subSpecForSkill(SkillType s) => _skillSubSpecs[s];
+
+  // Testing helpers
+  @visibleForTesting
+  void startBoarHuntForTest() {
+    _activeCombat = CombatState(
+      beast: Beasts.forestBoar,
+      beastCurrentHealth: Beasts.forestBoar.maxHealth,
+      playerStartHealth: _playerStats.currentHealth,
+      combatLog: const ["Tracked down 🐗 Forest Boar!"],
+      roundHistory: const [],
+      roundsSinceLastTelegraph: 0,
+      activeTelegraph: null,
+      pendingStance: null,
+      roundDeadline: DateTime.now().add(Duration(milliseconds: combatRoundDurationMs)),
+      pendingQuickslotIndex: null,
+      currentRoundNumber: 1,
+    );
+    notifyListeners();
+  }
+
+  @visibleForTesting
+  void tickRoundTimerForTest(Duration elapsed) {
+    if (_activeCombat == null) return;
+    _activeCombat = _activeCombat!.copyWith(
+      roundDeadline: DateTime.now().subtract(elapsed),
+    );
+    _onRoundTimerExpired();
+  }
+
+  @visibleForTesting
+  void setPlayerStatsForTest(PlayerStats stats) {
+    _playerStats = stats;
+    notifyListeners();
+  }
+
+  bool hasInputsForRecipe(Recipe recipe, Map<int, String> slotChoices, {String? modifierItemId, int count = 1}) {
+    final Map<String, int> needed = {};
+    for (int i = 0; i < recipe.slots.length; i++) {
+      final slot = recipe.slots[i];
+      final choiceItemId = slotChoices[i] ?? slot.acceptedItems.first.itemId;
+      needed[choiceItemId] = (needed[choiceItemId] ?? 0) + slot.quantity * count;
+    }
+    if (modifierItemId != null) {
+      needed[modifierItemId] = (needed[modifierItemId] ?? 0) + count;
+    }
+
+    final tempInventory = Map<String, int>.from(
+      Map.fromEntries(_inventory.slots.map((slot) => MapEntry(slot.item.id, slot.quantity)))
+    );
+
+    for (var entry in needed.entries) {
+      final itemId = entry.key;
+      final requiredQty = entry.value;
+      int available = tempInventory[itemId] ?? 0;
+      if (available >= requiredQty) {
+        tempInventory[itemId] = available - requiredQty;
+      } else {
+        // Not enough. Can we substitute driftwood for oak_log?
+        if (itemId == 'oak_log') {
+          final missing = requiredQty - available;
+          final driftwoodAvailable = tempInventory['driftwood'] ?? 0;
+          if (driftwoodAvailable >= missing) {
+            tempInventory[itemId] = 0;
+            tempInventory['driftwood'] = driftwoodAvailable - missing;
+          } else {
+            return false;
+          }
+        } else {
+          return false;
+        }
+      }
+    }
+    return true;
+  }
+
+  Map<String, int> consumeInputsForRecipe(Recipe recipe, Map<int, String> slotChoices, {String? modifierItemId, int count = 1}) {
+    final Map<String, int> needed = {};
+    for (int i = 0; i < recipe.slots.length; i++) {
+      final slot = recipe.slots[i];
+      final choiceItemId = slotChoices[i] ?? slot.acceptedItems.first.itemId;
+      needed[choiceItemId] = (needed[choiceItemId] ?? 0) + slot.quantity * count;
+    }
+    if (modifierItemId != null) {
+      needed[modifierItemId] = (needed[modifierItemId] ?? 0) + count;
+    }
+
+    final Map<String, int> consumed = {};
+    for (var entry in needed.entries) {
+      final itemId = entry.key;
+      final qty = entry.value;
+      if (itemId == 'oak_log') {
+        final driftwoodQty = _inventory.getItemCount('driftwood');
+        final driftwoodToConsume = min(qty, driftwoodQty);
+        final oakToConsume = qty - driftwoodToConsume;
+
+        if (driftwoodToConsume > 0) {
+          _inventory = _inventory.removeItem('driftwood', driftwoodToConsume);
+          consumed['driftwood'] = (consumed['driftwood'] ?? 0) + driftwoodToConsume;
+        }
+        if (oakToConsume > 0) {
+          _inventory = _inventory.removeItem('oak_log', oakToConsume);
+          consumed['oak_log'] = (consumed['oak_log'] ?? 0) + oakToConsume;
+        }
+      } else {
+        _inventory = _inventory.removeItem(itemId, qty);
+        consumed[itemId] = (consumed[itemId] ?? 0) + qty;
+      }
+    }
+    return consumed;
+  }
+
+  double calculateRecipeQualityBias(Recipe recipe, Map<String, int> consumedItems) {
+    double bias = 0.0;
+    final tempConsumed = Map<String, int>.from(consumedItems);
+    
+    for (final slot in recipe.slots) {
+      int neededQty = slot.quantity;
+      bool hasSubstitution = false;
+      double slotBias = 0.0;
+
+      for (final choice in slot.acceptedItems) {
+        final itemId = choice.itemId;
+        final available = tempConsumed[itemId] ?? 0;
+        if (available > 0) {
+          final matched = min(neededQty, available);
+          if (slotBias == 0.0) {
+            slotBias = choice.qualityBias;
+          }
+          tempConsumed[itemId] = available - matched;
+          neededQty -= matched;
+          if (neededQty <= 0) break;
+        }
+      }
+
+      if (neededQty > 0 && slot.acceptedItems.any((c) => c.itemId == 'oak_log')) {
+        final availableDriftwood = tempConsumed['driftwood'] ?? 0;
+        if (availableDriftwood > 0) {
+          final matched = min(neededQty, availableDriftwood);
+          hasSubstitution = true;
+          tempConsumed['driftwood'] = availableDriftwood - matched;
+          neededQty -= matched;
+        }
+      }
+
+      if (hasSubstitution) {
+        slotBias = (_skillSpecs[SkillType.woodcutting] == 'woodcutting_arborist') ? 0.30 : 0.03;
+      }
+      bias += slotBias;
+    }
+    return bias;
+  }
+
+  @visibleForTesting
+  bool hasInputsForRecipeForTest(Recipe recipe) {
+    final Map<int, String> slotChoices = {};
+    for (int i = 0; i < recipe.slots.length; i++) {
+      slotChoices[i] = recipe.slots[i].acceptedItems.first.itemId;
+    }
+    return hasInputsForRecipe(recipe, slotChoices);
+  }
+
+  @visibleForTesting
+  Map<String, int> consumeInputsForRecipeForTest(Recipe recipe) {
+    final Map<int, String> slotChoices = {};
+    for (int i = 0; i < recipe.slots.length; i++) {
+      slotChoices[i] = recipe.slots[i].acceptedItems.first.itemId;
+    }
+    return consumeInputsForRecipe(recipe, slotChoices);
+  }
+
+  @visibleForTesting
+  double calculateRecipeQualityBiasForTest(Recipe recipe, Map<String, int> consumedItems) {
+    return calculateRecipeQualityBias(recipe, consumedItems);
+  }
+
+  void _fireRandomEvent(RandomEvent event) {
+    _activeRandomEvent = ActiveRandomEventState(event: event, startedAt: DateTime.now());
+    _randomEventStream.add(event);
+    notifyListeners();
+  }
+
+  @visibleForTesting
+  void forceRandomEventForTest(RandomEvent event) => _fireRandomEvent(event);
+
+  void _maybeFireRandomEvent(ZoneAction action) {
+    if (_activeRandomEvent != null) return;
+    final roll = _random.nextDouble();
+    EventCategory? category;
+    if (roll < 0.02) category = EventCategory.interruption;
+    else if (roll < 0.035) category = EventCategory.discovery;
+    else if (roll < 0.045) category = EventCategory.traveler;
+    else if (roll < 0.045 + _omenChance()) category = EventCategory.omen;
+    else return;
+
+    final eligible = RandomEvents.all.where((e) {
+      if (e.category != category) return false;
+      if (e.triggerSkills != null && action.requiredSkill != null && !e.triggerSkills!.contains(action.requiredSkill)) return false;
+      if (e.triggerZoneTiers != null && !e.triggerZoneTiers!.contains(_currentZone.tier)) return false;
+      return true;
+    }).toList();
+
+    if (eligible.isEmpty) return;
+    final event = eligible[_random.nextInt(eligible.length)];
+    _fireRandomEvent(event);
+  }
+
+  double _omenChance() {
+    int count = 0;
+    final tags = <CodexTag>{};
+    for (final id in _knownCodexFragmentIds) {
+      final f = CodexFragments.findById(id);
+      if (f != null && (f.tag == CodexTag.wilds || f.tag == CodexTag.stone || f.tag == CodexTag.tide)) {
+        tags.add(f.tag);
+      }
+    }
+    if (_engineFlags.contains('breach_wilds_cleansed')) tags.remove(CodexTag.wilds);
+    if (_engineFlags.contains('breach_stone_cleansed')) tags.remove(CodexTag.stone);
+    if (_engineFlags.contains('breach_tide_cleansed')) tags.remove(CodexTag.tide);
+    count = tags.length;
+    return (0.0025 + count * 0.004).clamp(0.0025, 0.015);
+  }
+
+  void resolveRandomEvent(int optionIndex) {
+    if (_activeRandomEvent == null) return;
+    final event = _activeRandomEvent!.event;
+    if (optionIndex < 0 || optionIndex >= event.options.length) return;
+    final option = event.options[optionIndex];
+
+    if (option.requiredSkill != null) {
+      final skill = _skills[option.requiredSkill!];
+      if (skill == null || skill.level < option.requiredLevel) return;
+    }
+    if (option.requiredItemId != null && !_inventory.hasItem(option.requiredItemId!, option.requiredItemCount)) return;
+
+    // Apply costs
+    _playerStats = _playerStats.copyWith(
+      currentEnergy: (_playerStats.currentEnergy - option.energyCost).clamp(0, _playerStats.maxEnergy),
+      currentHealth: (_playerStats.currentHealth - option.healthCost).clamp(0, _playerStats.maxHealth),
+      gold: (_playerStats.gold - option.goldCost).clamp(0, 999999),
+    );
+    if (option.requiredItemId != null) {
+      _inventory = _inventory.removeItem(option.requiredItemId!, option.requiredItemCount);
+    }
+
+    for (final r in option.rewards) {
+      _grantEventReward(r);
+    }
+
+    log(option.feedback, LogType.info);
+    _activeRandomEvent = null;
+    notifyListeners();
+  }
+
+  void _grantEventReward(EventReward r) {
+    switch (r.kind) {
+      case EventRewardKind.item:
+        final item = Items.findById(r.targetId!);
+        if (item != null) _inventory = _inventory.addItem(item, r.amount);
+        break;
+      case EventRewardKind.gold:
+        _playerStats = _playerStats.copyWith(gold: _playerStats.gold + r.amount);
+        break;
+      case EventRewardKind.skillXp:
+        final skill = SkillType.values.firstWhere((s) => s.name == r.targetId);
+        _skills[skill] = _skills[skill]!.addXp(r.amount.toDouble());
+        break;
+      case EventRewardKind.fragment:
+        final tag = CodexTag.values.firstWhere((t) => t.name == r.targetId);
+        tryDropFragment(tag, 1.0);
+        break;
+    }
   }
 
   void resumeGame() {
@@ -2865,6 +4337,65 @@ class GameEngine extends ChangeNotifier {
       log("Game resumed.", LogType.info);
       notifyListeners();
     }
+  }
+
+  @visibleForTesting
+  void buildStructureForTest(String zoneId, String structureId) {
+    final struct = Structures.findById(structureId);
+    if (struct == null) return;
+    final stationKey = "$zoneId::$structureId";
+    _stationInstances[stationKey] = StationInstance(
+      zoneId: zoneId,
+      stationId: structureId,
+      tier: 1,
+      isRuined: false,
+      queue: [],
+    );
+    notifyListeners();
+  }
+
+  @visibleForTesting
+  void rebuildStationForTest(String zoneId, String stationId) {
+    final stationKey = "$zoneId::$stationId";
+    final instance = _stationInstances[stationKey];
+    if (instance != null) {
+      instance.isRuined = false;
+    } else {
+      _stationInstances[stationKey] = StationInstance(
+        zoneId: zoneId,
+        stationId: stationId,
+        tier: 1,
+        isRuined: false,
+        queue: [],
+      );
+    }
+    notifyListeners();
+  }
+
+  @visibleForTesting
+  void startCraftingForTest(Recipe recipe, String stationKey) {
+    final Map<int, String> slotChoices = {};
+    for (int i = 0; i < recipe.slots.length; i++) {
+      slotChoices[i] = recipe.slots[i].acceptedItems.first.itemId;
+    }
+    final instance = _stationInstances[stationKey];
+    if (instance == null) return;
+    
+    final entry = QueuedCraft(
+      recipeId: recipe.id,
+      count: 1,
+      slotChoices: slotChoices,
+      modifierItemId: null,
+      consumedItems: const {},
+    );
+    instance.queue.add(entry);
+    _startNextStationCraft(instance);
+    _completeStationCraft(instance);
+  }
+
+  @visibleForTesting
+  double getSpecCraftQualityBiasForTest(Recipe recipe, Item resultItem, String stationId) {
+    return _getSpecCraftQualityBias(recipe, resultItem, stationId);
   }
 
   @override
@@ -2879,6 +4410,7 @@ class GameEngine extends ChangeNotifier {
     _shopController.close();
     _questController.close();
     _milestoneController.close();
+    _puzzleResultController.close();
     super.dispose();
   }
 }

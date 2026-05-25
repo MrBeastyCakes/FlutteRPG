@@ -753,7 +753,164 @@ class Items {
     recipeId: 'steel_plate',
   );
 
+  // Sundered Coast resources
+  static const Item driftwood = Item(
+    id: 'driftwood',
+    name: 'Driftwood',
+    description: 'Salt-bleached wood washed up from deep water. Lighter than oak, harder than willow.',
+    icon: '🪵',
+    type: ItemType.resource,
+    value: 8,
+  );
+
+  static const Item saltCrystal = Item(
+    id: 'salt_crystal',
+    name: 'Salt Crystal',
+    description: 'A clear, faintly singing crystal of sea-salt. The Wharfmaster says they were used in the old beacons.',
+    icon: '🧂',
+    type: ItemType.resource,
+    value: 14,
+  );
+
+  static const Item pearlShell = Item(
+    id: 'pearl_shell',
+    name: 'Pearl Shell',
+    description: 'An iridescent shell from the deep tide pools. Coveted by armorers.',
+    icon: '🐚',
+    type: ItemType.resource,
+    value: 22,
+  );
+
+  static const Item kelp = Item(
+    id: 'kelp',
+    name: 'Sea Kelp',
+    description: 'Long ribbons of edible kelp. Tastes of the deep ocean.',
+    icon: '🌿',
+    type: ItemType.resource,
+    value: 6,
+  );
+
+  // Coast beast drops
+  static const Item tideHoundPelt = Item(
+    id: 'tide_hound_pelt',
+    name: 'Tide Hound Pelt',
+    description: 'A wet, mottled pelt from a coastal hound.',
+    icon: '🐕',
+    type: ItemType.resource,
+    value: 18,
+  );
+
+  static const Item houndFang = Item(
+    id: 'hound_fang',
+    name: 'Hound Fang',
+    description: 'A long curved fang. Slightly luminescent in the dark.',
+    icon: '🦷',
+    type: ItemType.resource,
+    value: 12,
+  );
+
+  static const Item crawlerCarapace = Item(
+    id: 'crawler_carapace',
+    name: 'Crawler Carapace',
+    description: 'A jagged plate from a brine crawler\'s shell.',
+    icon: '🛡️',
+    type: ItemType.resource,
+    value: 20,
+  );
+
+  static const Item saltTouchedPelt = Item(
+    id: 'salt_touched_pelt',
+    name: 'Salt-Touched Skin',
+    description: 'Translucent, salt-encrusted skin from a drowned thing. Buyers won\'t look you in the eye.',
+    icon: '🥥',
+    type: ItemType.resource,
+    value: 40,
+  );
+
+  static const Item honeycomb = Item(
+    id: 'honeycomb',
+    name: 'Honeycomb',
+    description: 'A sticky, golden comb. Sweetens any dish with a slight energy bonus.',
+    icon: '🍯',
+    type: ItemType.food,
+    value: 15,
+    healAmount: 8,
+    energyAmount: 12,
+  );
+
+  static const Item travelersFeather = Item(
+    id: 'travelers_feather',
+    name: "Traveler's Feather",
+    description: 'A long, slate-gray feather. They say it points toward hidden paths.',
+    icon: '🪶',
+    type: ItemType.resource,
+    value: 25,
+  );
+
+  static const Item saltCuredTrout = Item(
+    id: 'salt_cured_trout',
+    name: 'Salt-Cured Trout',
+    description: 'Fresh trout preserved in salt. Lasts longer than fresh fish and keeps your energy steady.',
+    icon: '🐟',
+    type: ItemType.food,
+    value: 30,
+    healAmount: 35,
+    energyAmount: 20,
+  );
+
+  static const Item brinedBoar = Item(
+    id: 'brined_boar',
+    name: 'Brined Boar',
+    description: 'Boar meat brined in salt-water. Heavy on the stomach, light on the wallet.',
+    icon: '🍖',
+    type: ItemType.food,
+    value: 40,
+    healAmount: 45,
+    energyAmount: 10,
+  );
+
+  static const Item kelpWrap = Item(
+    id: 'kelp_wrap',
+    name: 'Kelp Wrap',
+    description: 'A potato wrapped in sea kelp. Tastes of brine and earth.',
+    icon: '🥬',
+    type: ItemType.food,
+    value: 35,
+    healAmount: 30,
+    energyAmount: 25,
+  );
+
+  static const Item pearlTonic = Item(
+    id: 'pearl_tonic',
+    name: 'Pearl Tonic',
+    description: 'A pearlescent draught that sharpens the hands and clears the head.',
+    icon: '🧪',
+    type: ItemType.food,
+    value: 80,
+    healAmount: 0,
+    energyAmount: 60,
+  );
+
+  static const Item brineStabilizer = Item(
+    id: 'brine_stabilizer',
+    name: 'Brine Stabilizer',
+    description: 'A clear, briny gel. Crafters use it as a stabilizing modifier when working on tricky recipes.',
+    icon: '🫙',
+    type: ItemType.resource,
+    value: 50,
+  );
+
+  static const Item heartwood = Item(
+    id: 'heartwood',
+    name: 'Heartwood',
+    description: 'A dense, resinous piece of ancient wood, prized for high-quality crafting.',
+    icon: '🪵',
+    type: ItemType.resource,
+    value: 50,
+  );
+
   static const List<Item> all = [
+    heartwood,
     oakLog,
     willowLog,
     copperOre,
@@ -819,6 +976,22 @@ class Items {
     blueprintElixir4,
     blueprintGlyphMastery,
     blueprintSteelPlate,
+    driftwood,
+    saltCrystal,
+    pearlShell,
+    kelp,
+    tideHoundPelt,
+    houndFang,
+    crawlerCarapace,
+    saltTouchedPelt,
+    honeycomb,
+    travelersFeather,
+    saltCuredTrout,
+    brinedBoar,
+    kelpWrap,
+    pearlTonic,
+    brineStabilizer,
+    heartwood,
   ];
 
   static Item? findById(String id) {
