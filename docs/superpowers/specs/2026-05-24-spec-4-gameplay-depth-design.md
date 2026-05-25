@@ -757,122 +757,889 @@ static final MasterworkTask combatLvl20Berserker = MasterworkTask(
 #### 2. Guardian Lvl 20 — *Walls and Mirrors*
 
 ```dart
-// 4-step trial. start → bastion_end / sentinel_end
-// Framing: "A great cavern troll bears down. Your shield is ready."
-// Branch A: "Plant your feet, weather every blow" → Bastion (subSpec)
-// Branch B: "Let each strike rebound from your shield" → Sentinel (subSpec)
+static final MasterworkTask combatLvl20Guardian = MasterworkTask(
+  id: 'task_lvl20_combat_guardian',
+  skillType: SkillType.combat,
+  levelGate: 20,
+  title: 'Walls and Mirrors',
+  description: 'You have followed the Guardian path. A cavern troll bears down on you; you have not lifted your sword.',
+  startStepId: 'start',
+  steps: {
+    'start': MasterworkStep(
+      id: 'start',
+      prompt: 'The troll roars and charges. Your shield is ready. The question is not whether you survive — you have made that question small. The question is what you teach the troll.',
+      options: [
+        MasterworkOption(
+          text: 'Plant your feet. Become the wall that does not move.',
+          nextStepId: 'bastion_end',
+          feedback: 'You set your stance wide and low. The troll\'s charge slams into nothing it can move.',
+        ),
+        MasterworkOption(
+          text: 'Angle your shield. Let every strike rebound back into the striker.',
+          nextStepId: 'sentinel_end',
+          feedback: 'You turn the shield-face. The troll\'s first blow lands and returns, rocking the troll on its heels.',
+        ),
+      ],
+    ),
+    'bastion_end': MasterworkStep(
+      id: 'bastion_end',
+      prompt: 'The troll batters you for what feels like an hour. You do not move. It tires before you do.',
+      options: [
+        MasterworkOption(
+          text: 'Step forward and end it.',
+          isSuccess: true,
+          energyCost: 25,
+          feedback: 'The troll falls. You are Bastion. Nothing will move you that does not move the world first.',
+          subSpecPath: 'combat_bastion',
+        ),
+      ],
+    ),
+    'sentinel_end': MasterworkStep(
+      id: 'sentinel_end',
+      prompt: 'The troll bleeds from its own blows. You have not landed one. It still falls.',
+      options: [
+        MasterworkOption(
+          text: 'Let it collapse into its own weight.',
+          isSuccess: true,
+          energyCost: 20,
+          feedback: 'You are Sentinel. Your enemies break themselves on you.',
+          subSpecPath: 'combat_sentinel',
+        ),
+      ],
+    ),
+  },
+);
 ```
 
-#### 3. Smith Lvl 20 — *The Greater Ironbark* (sample reference)
+#### 3. Smith Lvl 20 — *The Greater Ironbark*
 
-(Full text shown earlier in design Section 4 — wiring crafting_weaponsmith vs crafting_armorsmith.)
+```dart
+static final MasterworkTask craftingLvl20Smith = MasterworkTask(
+  id: 'task_lvl20_crafting_smith',
+  skillType: SkillType.crafting,
+  levelGate: 20,
+  title: 'The Greater Ironbark',
+  description: 'A second Ironbark stands in the deeper grove, taller and harder than the first. Your Smith path has shaped you; the path you cut next will refine it further.',
+  startStepId: 'start',
+  steps: {
+    'start': MasterworkStep(
+      id: 'start',
+      prompt: 'The Greater Ironbark towers above you. Your hammer-arm twitches; you have grown strong on the forge path. But today the choice is what kind of strong you will be.',
+      options: [
+        MasterworkOption(
+          text: 'Reshape your axe-head before approaching — a longer, finer edge.',
+          nextStepId: 'weaponsmith_end',
+          requiredItemId: 'iron_ore',
+          requiredItemCount: 8,
+          feedback: 'You temper the iron with practiced strokes. The axe rings like a bell.',
+        ),
+        MasterworkOption(
+          text: 'Reshape your armor instead — let the tree fall and the impact test the gear.',
+          nextStepId: 'armorsmith_end',
+          requiredItemId: 'iron_ore',
+          requiredItemCount: 6,
+          feedback: 'You re-rivet your chest plate and brace your stance. The armor sits true.',
+        ),
+      ],
+    ),
+    'weaponsmith_end': MasterworkStep(
+      id: 'weaponsmith_end',
+      prompt: 'With the sharper axe, the cut comes precise and deep. You fell the Greater Ironbark with one stroke.',
+      options: [
+        MasterworkOption(
+          text: 'Take the heartwood and forge a new blade pattern.',
+          isSuccess: true,
+          energyCost: 25,
+          feedback: 'You bear the heartwood home and forge a new pattern from it. Your weaponcraft has reached a master\'s hand. Weaponsmith unlocked.',
+          subSpecPath: 'crafting_weaponsmith',
+        ),
+      ],
+    ),
+    'armorsmith_end': MasterworkStep(
+      id: 'armorsmith_end',
+      prompt: 'The tree falls; the impact rings through your braced armor. You feel no harm. You read the weak points the impact revealed in the metal.',
+      options: [
+        MasterworkOption(
+          text: 'Take the heartwood and lay out a new armor pattern.',
+          isSuccess: true,
+          energyCost: 20,
+          feedback: 'You bear the heartwood home and lay out a new armor pattern from it. Your armorcraft has reached a master\'s hand. Armorsmith unlocked.',
+          subSpecPath: 'crafting_armorsmith',
+        ),
+      ],
+    ),
+  },
+);
+```
 
 #### 4. Tinker Lvl 20 — *The Salt-Eaten Loom*
 
 ```dart
-// 4-step trial. start → toolmaker_end / backpacker_end
-// Framing: "A salt-eaten loom in the Drowned Lighthouse — broken in interesting ways."
-// Branch A: "Repair the loom's tool-bench" → Toolmaker
-// Branch B: "Salvage the loom's straps as backpack thread" → Backpacker
+static final MasterworkTask craftingLvl20Tinker = MasterworkTask(
+  id: 'task_lvl20_crafting_tinker',
+  skillType: SkillType.crafting,
+  levelGate: 20,
+  title: 'The Salt-Eaten Loom',
+  description: 'A loom in the Drowned Lighthouse, eaten through by salt. Broken in interesting ways. Your Tinker eye reads it like a book.',
+  startStepId: 'start',
+  steps: {
+    'start': MasterworkStep(
+      id: 'start',
+      prompt: 'The loom is a wreck, but the wreck shows you something. Two halves of it are still useful. You cannot save both.',
+      options: [
+        MasterworkOption(
+          text: 'Repair the loom\'s tool-bench — the small precise vises and rasps.',
+          nextStepId: 'toolmaker_end',
+          requiredItemId: 'driftwood',
+          requiredItemCount: 6,
+          feedback: 'You salvage the brass fittings and re-rig the bench with driftwood. Every tool you make there sits a little finer.',
+        ),
+        MasterworkOption(
+          text: 'Salvage the loom\'s straps and webbing for backpack work.',
+          nextStepId: 'backpacker_end',
+          requiredItemId: 'spider_silk',
+          requiredItemCount: 4,
+          feedback: 'You unwind the salt-stiff straps and reweave them with fresh spider silk. The new harness holds more than the old.',
+        ),
+      ],
+    ),
+    'toolmaker_end': MasterworkStep(
+      id: 'toolmaker_end',
+      prompt: 'Your new bench sits true. The first tool you craft on it sings under the rasp.',
+      options: [
+        MasterworkOption(
+          text: 'Pack the bench home.',
+          isSuccess: true,
+          energyCost: 20,
+          feedback: 'You are Toolmaker. Every tool from your hands carries the salt-loom\'s memory.',
+          subSpecPath: 'crafting_toolmaker',
+        ),
+      ],
+    ),
+    'backpacker_end': MasterworkStep(
+      id: 'backpacker_end',
+      prompt: 'The new harness fits you. It feels lighter, somehow, than the old one — though it carries more.',
+      options: [
+        MasterworkOption(
+          text: 'Settle the straps and walk home.',
+          isSuccess: true,
+          energyCost: 18,
+          feedback: 'You are Backpacker. The loom\'s last work is what you wear.',
+          subSpecPath: 'crafting_backpacker',
+        ),
+      ],
+    ),
+  },
+);
 ```
 
 #### 5. Innkeeper Lvl 20 — *The Long Feast*
 
 ```dart
-// Framing: "The Cartographer's Tent throws a feast for the Wharfmaster's arrival."
-// Branch A: "Brew the drinks" → Brewmaster
-// Branch B: "Bake the pastries" → Pastrycook
+static final MasterworkTask cookingLvl20Innkeeper = MasterworkTask(
+  id: 'task_lvl20_cooking_innkeeper',
+  skillType: SkillType.cooking,
+  levelGate: 20,
+  title: 'The Long Feast',
+  description: 'The Cartographer\'s Tent is throwing a feast for the Wharfmaster\'s arrival. You are running the kitchen.',
+  startStepId: 'start',
+  steps: {
+    'start': MasterworkStep(
+      id: 'start',
+      prompt: 'Two stations need a master\'s hand. You can only stand at one. The other will be lesser.',
+      options: [
+        MasterworkOption(
+          text: 'Take the brewing station — the drinks are the spine of the feast.',
+          nextStepId: 'brewmaster_end',
+          requiredItemId: 'wildflower',
+          requiredItemCount: 6,
+          feedback: 'You set wildflower mead, bittered tea, and hot rye to brewing in turn.',
+        ),
+        MasterworkOption(
+          text: 'Take the oven — the pastries set the mood.',
+          nextStepId: 'pastrycook_end',
+          requiredItemId: 'baked_potato',
+          requiredItemCount: 3,
+          feedback: 'You bind potato dough into delicate parcels and slip them into the oven.',
+        ),
+      ],
+    ),
+    'brewmaster_end': MasterworkStep(
+      id: 'brewmaster_end',
+      prompt: 'Every guest drinks. Every guest leaves stronger than they came.',
+      options: [
+        MasterworkOption(
+          text: 'Hand the last cup to the Wharfmaster.',
+          isSuccess: true,
+          energyCost: 18,
+          feedback: 'You are Brewmaster. Your drinks restore what food cannot reach.',
+          subSpecPath: 'cooking_brewmaster',
+        ),
+      ],
+    ),
+    'pastrycook_end': MasterworkStep(
+      id: 'pastrycook_end',
+      prompt: 'The pastries leave the oven golden. Every bite carries a small fortune of luck.',
+      options: [
+        MasterworkOption(
+          text: 'Plate the last tray.',
+          isSuccess: true,
+          energyCost: 16,
+          feedback: 'You are Pastrycook. Your food gifts more than nourishment.',
+          subSpecPath: 'cooking_pastrycook',
+        ),
+      ],
+    ),
+  },
+);
 ```
 
 #### 6. Field-Chef Lvl 20 — *Fire on the Wayside*
 
 ```dart
-// Framing: "A wayside fire, no station, no time. You need to feed a hungry party."
-// Branch A: "Cook each animal whole and quick" → Trailcook
-// Branch B: "Make a stew from everything at once" → Stewmaster
+static final MasterworkTask cookingLvl20FieldChef = MasterworkTask(
+  id: 'task_lvl20_cooking_field_chef',
+  skillType: SkillType.cooking,
+  levelGate: 20,
+  title: 'Fire on the Wayside',
+  description: 'A wayside fire, no station, no walls. A hungry party is coming home with the dusk.',
+  startStepId: 'start',
+  steps: {
+    'start': MasterworkStep(
+      id: 'start',
+      prompt: 'You have a fire and what you can carry. The party will be here in an hour. You cannot do everything.',
+      options: [
+        MasterworkOption(
+          text: 'Spit-roast each catch whole — speed is the priority.',
+          nextStepId: 'trailcook_end',
+          requiredItemId: 'raw_trout',
+          requiredItemCount: 2,
+          feedback: 'You spit each trout, salt it heavy, and turn them in rotation. The smell brings the party home faster than their feet.',
+        ),
+        MasterworkOption(
+          text: 'Combine everything into one great stew — the whole is more than parts.',
+          nextStepId: 'stewmaster_end',
+          requiredItemId: 'boar_meat',
+          requiredItemCount: 2,
+          feedback: 'You build a stew from boar, kelp, salt, and whatever herb you find at hand. The pot rumbles low and rich.',
+        ),
+      ],
+    ),
+    'trailcook_end': MasterworkStep(
+      id: 'trailcook_end',
+      prompt: 'Each fish is served whole and quick. The party eats standing, smiling, ready to walk again.',
+      options: [
+        MasterworkOption(
+          text: 'Bank the fire.',
+          isSuccess: true,
+          energyCost: 12,
+          feedback: 'You are Trailcook. No station, no station needed.',
+          subSpecPath: 'cooking_trailcook',
+        ),
+      ],
+    ),
+    'stewmaster_end': MasterworkStep(
+      id: 'stewmaster_end',
+      prompt: 'The stew is ladled into every bowl. Each bowl tastes of every ingredient at once.',
+      options: [
+        MasterworkOption(
+          text: 'Drain the pot.',
+          isSuccess: true,
+          energyCost: 14,
+          feedback: 'You are Stewmaster. Two foods become one greater food in your hands.',
+          subSpecPath: 'cooking_stewmaster',
+        ),
+      ],
+    ),
+  },
+);
 ```
 
 #### 7. Garden-Keeper Lvl 20 — *The Second Garden*
 
 ```dart
-// Framing: "Your garden has thrived. You have room for a second bed."
-// Branch A: "Plant berries alongside" → Botanist
-// Branch B: "Plant nightshade with caution" → Hedge-Witch
+static final MasterworkTask herbalismLvl20GardenKeeper = MasterworkTask(
+  id: 'task_lvl20_herbalism_garden_keeper',
+  skillType: SkillType.herbalism,
+  levelGate: 20,
+  title: 'The Second Garden',
+  description: 'Your wildflower garden has thrived. You have room for a second bed. The question is what to plant in it.',
+  startStepId: 'start',
+  steps: {
+    'start': MasterworkStep(
+      id: 'start',
+      prompt: 'You have turned the earth and prepared the bed. The soil is good. What you plant here will shape what comes from your garden for years.',
+      options: [
+        MasterworkOption(
+          text: 'Plant wild berries alongside — they pair with the bluebells.',
+          nextStepId: 'botanist_end',
+          requiredItemId: 'wild_berries',
+          requiredItemCount: 5,
+          feedback: 'You press berry-seeds into the soil. The garden will bear two harvests now.',
+        ),
+        MasterworkOption(
+          text: 'Plant nightshade — risky, but the rewards are uncommon.',
+          nextStepId: 'hedge_witch_end',
+          requiredItemId: 'nightshade',
+          requiredItemCount: 3,
+          feedback: 'You bed the nightshade carefully, ringed in stones. It needs space and patience.',
+        ),
+      ],
+    ),
+    'botanist_end': MasterworkStep(
+      id: 'botanist_end',
+      prompt: 'The berry shoots come up two weeks later, healthy and bright.',
+      options: [
+        MasterworkOption(
+          text: 'Tend the garden.',
+          isSuccess: true,
+          energyCost: 15,
+          feedback: 'You are Botanist. Your garden gives more than one harvest.',
+          subSpecPath: 'herbalism_botanist',
+        ),
+      ],
+    ),
+    'hedge_witch_end': MasterworkStep(
+      id: 'hedge_witch_end',
+      prompt: 'The nightshade is slow. But when it blooms, it blooms purple and rare.',
+      options: [
+        MasterworkOption(
+          text: 'Crouch beside the bed and breathe in.',
+          isSuccess: true,
+          energyCost: 18,
+          feedback: 'You are Hedge-Witch. Your garden grows what others fear to touch.',
+          subSpecPath: 'herbalism_hedge_witch',
+        ),
+      ],
+    ),
+  },
+);
 ```
 
 #### 8. Wild-Walker Lvl 20 — *The Deep Grove*
 
 ```dart
-// Framing: "You stand in the heart of a grove that no warden has named."
-// Branch A: "Harvest the nightshade carefully" → Poison-Picker
-// Branch B: "Take only what blooms first" → Bloomseer
+static final MasterworkTask herbalismLvl20WildWalker = MasterworkTask(
+  id: 'task_lvl20_herbalism_wild_walker',
+  skillType: SkillType.herbalism,
+  levelGate: 20,
+  title: 'The Deep Grove',
+  description: 'You stand in the heart of a grove that no warden has named. Both poison and bloom grow thick here.',
+  startStepId: 'start',
+  steps: {
+    'start': MasterworkStep(
+      id: 'start',
+      prompt: 'Two harvests are possible. Either is worth a season\'s walking. You cannot take both.',
+      options: [
+        MasterworkOption(
+          text: 'Harvest the nightshade — careful, deliberate, stacked into the pack.',
+          nextStepId: 'poison_picker_end',
+          feedback: 'You bind each cluster of nightshade in turn. The pack grows heavy with violet weight.',
+        ),
+        MasterworkOption(
+          text: 'Take only what is in first bloom — fastest, lightest, most varied.',
+          nextStepId: 'bloomseer_end',
+          feedback: 'You move through the grove in long strides, taking only the brightest blossoms. The walk itself is the gathering.',
+        ),
+      ],
+    ),
+    'poison_picker_end': MasterworkStep(
+      id: 'poison_picker_end',
+      prompt: 'You leave the grove with a pack heavier than you came in with. Every cluster is whole.',
+      options: [
+        MasterworkOption(
+          text: 'Walk home slow under the weight.',
+          isSuccess: true,
+          energyCost: 18,
+          feedback: 'You are Poison-Picker. Where nightshade grows, you carry it home.',
+          subSpecPath: 'herbalism_poison_picker',
+        ),
+      ],
+    ),
+    'bloomseer_end': MasterworkStep(
+      id: 'bloomseer_end',
+      prompt: 'You leave the grove almost as light as you came in. Every bloom in your pack is at perfect freshness.',
+      options: [
+        MasterworkOption(
+          text: 'Step quick down the trail.',
+          isSuccess: true,
+          energyCost: 12,
+          feedback: 'You are Bloomseer. The first bloom is the only bloom worth taking, and you find it before others see it.',
+          subSpecPath: 'herbalism_bloomseer',
+        ),
+      ],
+    ),
+  },
+);
 ```
 
 #### 9. Logger Lvl 20 — *The Old Stand*
 
 ```dart
-// Framing: "An old stand of trees — enough wood for a winter."
-// Branch A: "Fell every tree, no waste" → Clearcutter
-// Branch B: "Move fast, take what's easy" → Speedchopper
+static final MasterworkTask woodcuttingLvl20Logger = MasterworkTask(
+  id: 'task_lvl20_woodcutting_logger',
+  skillType: SkillType.woodcutting,
+  levelGate: 20,
+  title: 'The Old Stand',
+  description: 'An old stand of oaks — enough wood for a winter. You have to choose how you harvest it.',
+  startStepId: 'start',
+  steps: {
+    'start': MasterworkStep(
+      id: 'start',
+      prompt: 'The stand is yours for one day. You can take every tree, slow, and waste nothing. Or you can move fast and take the easy ones. The cold is coming either way.',
+      options: [
+        MasterworkOption(
+          text: 'Fell every tree. Slow, methodical, no waste.',
+          nextStepId: 'clearcutter_end',
+          feedback: 'You work from dawn, dropping one tree, then the next, in a steady cadence. You finish at dusk with everything.',
+        ),
+        MasterworkOption(
+          text: 'Take what falls easiest. Speed over volume.',
+          nextStepId: 'speedchopper_end',
+          feedback: 'You range the stand, picking out the easy fells, the half-leaning ones, the ones whose roots are already loose.',
+        ),
+      ],
+    ),
+    'clearcutter_end': MasterworkStep(
+      id: 'clearcutter_end',
+      prompt: 'The stand is gone. The pile beside you is enormous.',
+      options: [
+        MasterworkOption(
+          text: 'Begin hauling.',
+          isSuccess: true,
+          energyCost: 30,
+          feedback: 'You are Clearcutter. Where you cut, you cut everything.',
+          subSpecPath: 'woodcutting_clearcutter',
+        ),
+      ],
+    ),
+    'speedchopper_end': MasterworkStep(
+      id: 'speedchopper_end',
+      prompt: 'You took a third of the stand in a morning and left the rest to live.',
+      options: [
+        MasterworkOption(
+          text: 'Walk home with the load.',
+          isSuccess: true,
+          energyCost: 15,
+          feedback: 'You are Speedchopper. Your axe goes where the work goes easiest.',
+          subSpecPath: 'woodcutting_speedchopper',
+        ),
+      ],
+    ),
+  },
+);
 ```
 
 #### 10. Arborist Lvl 20 — *The Sapling Path*
 
 ```dart
-// Framing: "A sapling grove damaged by storm. You see what could be saved."
-// Branch A: "Tend the saplings — they will return value" → Sapling-Mender
-// Branch B: "Read the heartwood of the dying trees — there's rarer stock here" → Heartwood-Reader
+static final MasterworkTask woodcuttingLvl20Arborist = MasterworkTask(
+  id: 'task_lvl20_woodcutting_arborist',
+  skillType: SkillType.woodcutting,
+  levelGate: 20,
+  title: 'The Sapling Path',
+  description: 'A storm has torn through a sapling grove. Some young trees are saved; others are bent past mending. You see what could be done.',
+  startStepId: 'start',
+  steps: {
+    'start': MasterworkStep(
+      id: 'start',
+      prompt: 'You stand among the wreckage of the storm. The young trees can be tended. The dying older ones can be read — their heartwood often holds rarer stock than their living relatives. Both take a season.',
+      options: [
+        MasterworkOption(
+          text: 'Tend the surviving saplings. They will return value for years.',
+          nextStepId: 'sapling_mender_end',
+          feedback: 'You stake each leaning sapling, ring each root in stones, and begin a season\'s patient work.',
+        ),
+        MasterworkOption(
+          text: 'Read the heartwood of the dying trees. The rare stock is here, if anywhere.',
+          nextStepId: 'heartwood_reader_end',
+          feedback: 'You bring out the small chisel and the listening-glass. The heartwood speaks of three trees with Ironbark grain.',
+        ),
+      ],
+    ),
+    'sapling_mender_end': MasterworkStep(
+      id: 'sapling_mender_end',
+      prompt: 'The saplings take. Six months later the grove is bright again.',
+      options: [
+        MasterworkOption(
+          text: 'Walk the new grove.',
+          isSuccess: true,
+          energyCost: 18,
+          feedback: 'You are Sapling-Mender. Your grove gives back to you forever.',
+          subSpecPath: 'woodcutting_sapling_mender',
+        ),
+      ],
+    ),
+    'heartwood_reader_end': MasterworkStep(
+      id: 'heartwood_reader_end',
+      prompt: 'You take three logs of true Ironbark from the dying trees. They are worth a small fortune.',
+      options: [
+        MasterworkOption(
+          text: 'Bear the logs home.',
+          isSuccess: true,
+          energyCost: 22,
+          feedback: 'You are Heartwood-Reader. Where rare wood grows, you find it.',
+          subSpecPath: 'woodcutting_heartwood_reader',
+        ),
+      ],
+    ),
+  },
+);
 ```
 
 #### 11. Prospector Lvl 20 — *The Cavern's Promise*
 
 ```dart
-// Framing: "A cavern your foreman wouldn't enter."
-// Branch A: "Seek every hidden vein" → Vein-Hunter
-// Branch B: "Call out for the tunnel to hold — work safer here" → Tunnel-Caller
+static final MasterworkTask miningLvl20Prospector = MasterworkTask(
+  id: 'task_lvl20_mining_prospector',
+  skillType: SkillType.mining,
+  levelGate: 20,
+  title: 'The Cavern\'s Promise',
+  description: 'A cavern your foreman would not enter. The veins are deep and the roof is uncertain.',
+  startStepId: 'start',
+  steps: {
+    'start': MasterworkStep(
+      id: 'start',
+      prompt: 'You stand at the cavern mouth. The veins glint deep within. The roof is bowed. You can search every shadow for the hidden ones, or you can work the safer cuts and call out for the tunnel to hold.',
+      options: [
+        MasterworkOption(
+          text: 'Hunt every vein. Where there is one, there are three more hidden.',
+          nextStepId: 'vein_hunter_end',
+          feedback: 'You crouch low and read the cavern walls. Hidden veins reveal themselves to the patient eye.',
+        ),
+        MasterworkOption(
+          text: 'Work the obvious veins. Speak to the roof. Make it hold.',
+          nextStepId: 'tunnel_caller_end',
+          requiredItemId: 'river_clay',
+          requiredItemCount: 4,
+          feedback: 'You pack clay into the worst stress points and work the open faces. The roof groans but holds.',
+        ),
+      ],
+    ),
+    'vein_hunter_end': MasterworkStep(
+      id: 'vein_hunter_end',
+      prompt: 'You find veins others have walked past for years.',
+      options: [
+        MasterworkOption(
+          text: 'Mark them in your journal.',
+          isSuccess: true,
+          energyCost: 22,
+          feedback: 'You are Vein-Hunter. Where ore hides, you read its hiding place.',
+          subSpecPath: 'mining_vein_hunter',
+        ),
+      ],
+    ),
+    'tunnel_caller_end': MasterworkStep(
+      id: 'tunnel_caller_end',
+      prompt: 'The roof holds for the whole shift. You take what you came for and leave the cavern safer than you found it.',
+      options: [
+        MasterworkOption(
+          text: 'Walk out into the day.',
+          isSuccess: true,
+          energyCost: 18,
+          feedback: 'You are Tunnel-Caller. Where you work, the tunnels stay open.',
+          subSpecPath: 'mining_tunnel_caller',
+        ),
+      ],
+    ),
+  },
+);
 ```
 
 #### 12. Refiner Lvl 20 — *The Smelter's Heart*
 
 ```dart
-// Framing: "An old smelter stands cold. You can rebuild it your way."
-// Branch A: "Build for output — double the throughput" → Smelt-Master
-// Branch B: "Build for purity — better ingots" → Slag-Cutter
+static final MasterworkTask miningLvl20Refiner = MasterworkTask(
+  id: 'task_lvl20_mining_refiner',
+  skillType: SkillType.mining,
+  levelGate: 20,
+  title: 'The Smelter\'s Heart',
+  description: 'An old smelter stands cold in the deeper shafts. You can rebuild it your way.',
+  startStepId: 'start',
+  steps: {
+    'start': MasterworkStep(
+      id: 'start',
+      prompt: 'The smelter\'s heart is broken. You have the parts to rebuild it, but the rebuild itself is a choice. You can build for output — double the throughput — or for purity.',
+      options: [
+        MasterworkOption(
+          text: 'Build for output. Twin furnaces, parallel feeds, max throughput.',
+          nextStepId: 'smelt_master_end',
+          requiredItemId: 'iron_ore',
+          requiredItemCount: 10,
+          feedback: 'You forge the twin firepots and link them with a wide flue. The smelter\'s mouth grows wider than the old design ever was.',
+        ),
+        MasterworkOption(
+          text: 'Build for purity. A single deeper crucible, finer drafts, slower work, better ingots.',
+          nextStepId: 'slag_cutter_end',
+          requiredItemId: 'river_clay',
+          requiredItemCount: 8,
+          feedback: 'You line the crucible with seven layers of clay and reset the drafts to a finer flow. The smelter will work slow but speak true.',
+        ),
+      ],
+    ),
+    'smelt_master_end': MasterworkStep(
+      id: 'smelt_master_end',
+      prompt: 'The new smelter eats ore at twice the pace. The yield is what you wanted.',
+      options: [
+        MasterworkOption(
+          text: 'Tap the first run.',
+          isSuccess: true,
+          energyCost: 25,
+          feedback: 'You are Smelt-Master. Every load that enters comes out doubled.',
+          subSpecPath: 'mining_smelt_master',
+        ),
+      ],
+    ),
+    'slag_cutter_end': MasterworkStep(
+      id: 'slag_cutter_end',
+      prompt: 'The first ingot rings like a small bell. There is no slag.',
+      options: [
+        MasterworkOption(
+          text: 'Pour the next run.',
+          isSuccess: true,
+          energyCost: 22,
+          feedback: 'You are Slag-Cutter. Your ingots carry no impurity.',
+          subSpecPath: 'mining_slag_cutter',
+        ),
+      ],
+    ),
+  },
+);
 ```
 
 #### 13. Cartographer Lvl 20 — *Charts of the Sea*
 
 ```dart
-// Framing: "The Wharfmaster shows you old sea-charts."
-// Branch A: "Study the weather patterns" → Sea-Reader
-// Branch B: "Study the trade paths" → Path-Mapper
+static final MasterworkTask wayfindingLvl20Cartographer = MasterworkTask(
+  id: 'task_lvl20_wayfinding_cartographer',
+  skillType: SkillType.wayfinding,
+  levelGate: 20,
+  title: 'Charts of the Sea',
+  description: 'The Wharfmaster spreads old sea-charts before you. Two studies are possible. You can master one.',
+  startStepId: 'start',
+  steps: {
+    'start': MasterworkStep(
+      id: 'start',
+      prompt: 'The charts are layered: weather patterns marked in faded red ink, trade paths in faded blue. To master one is to read it as the keepers once did. To master both is beyond a single season.',
+      options: [
+        MasterworkOption(
+          text: 'Study the red ink — weather patterns and tide turns.',
+          nextStepId: 'sea_reader_end',
+          feedback: 'You spend the season reading red ink. The Wharfmaster nods more often than he speaks.',
+        ),
+        MasterworkOption(
+          text: 'Study the blue ink — trade paths and stopping points.',
+          nextStepId: 'path_mapper_end',
+          feedback: 'You spend the season memorizing every blue line. The paths begin to overlay on the land in your mind.',
+        ),
+      ],
+    ),
+    'sea_reader_end': MasterworkStep(
+      id: 'sea_reader_end',
+      prompt: 'You can read the Coast weather ten minutes before it changes. The Wharfmaster stops checking the sky himself.',
+      options: [
+        MasterworkOption(
+          text: 'Take the charts with you.',
+          isSuccess: true,
+          energyCost: 18,
+          feedback: 'You are Sea-Reader. The weather speaks to you before it speaks to others.',
+          subSpecPath: 'wayfinding_sea_reader',
+        ),
+      ],
+    ),
+    'path_mapper_end': MasterworkStep(
+      id: 'path_mapper_end',
+      prompt: 'You walk the scouted paths in your sleep. There are no surprises left in the lines you have studied.',
+      options: [
+        MasterworkOption(
+          text: 'Roll up the charts.',
+          isSuccess: true,
+          energyCost: 16,
+          feedback: 'You are Path-Mapper. Where you have been, you go instantly.',
+          subSpecPath: 'wayfinding_path_mapper',
+        ),
+      ],
+    ),
+  },
+);
 ```
 
 #### 14. Tracker Lvl 20 — *The Last Spoor*
 
 ```dart
-// Framing: "A rare beast's trail, fresh in mud."
-// Branch A: "Lure it out — control the encounter" → Beast-Lurer
-// Branch B: "Read the spoor — know what comes" → Spoor-Reader
+static final MasterworkTask wayfindingLvl20Tracker = MasterworkTask(
+  id: 'task_lvl20_wayfinding_tracker',
+  skillType: SkillType.wayfinding,
+  levelGate: 20,
+  title: 'The Last Spoor',
+  description: 'A rare beast\'s trail, fresh in mud. The choice now is how you meet it.',
+  startStepId: 'start',
+  steps: {
+    'start': MasterworkStep(
+      id: 'start',
+      prompt: 'The trail is fresh. You can move ahead of it and lure the beast to ground of your choosing. Or you can stay behind it, reading the spoor, and know everything before you meet it.',
+      options: [
+        MasterworkOption(
+          text: 'Lure it out. Pick the ground. Control the encounter.',
+          nextStepId: 'beast_lurer_end',
+          feedback: 'You circle ahead and lay scent. The beast comes to you, on terrain you have chosen.',
+        ),
+        MasterworkOption(
+          text: 'Read the spoor. Know everything before you meet it.',
+          nextStepId: 'spoor_reader_end',
+          feedback: 'You crouch over each track and broken twig. The beast\'s habits unfold across the mud like writing.',
+        ),
+      ],
+    ),
+    'beast_lurer_end': MasterworkStep(
+      id: 'beast_lurer_end',
+      prompt: 'The beast arrives where you chose. The fight is brief and yours.',
+      options: [
+        MasterworkOption(
+          text: 'Clean the blade.',
+          isSuccess: true,
+          energyCost: 20,
+          feedback: 'You are Beast-Lurer. Beasts come to you, never the other way.',
+          subSpecPath: 'wayfinding_beast_lurer',
+        ),
+      ],
+    ),
+    'spoor_reader_end': MasterworkStep(
+      id: 'spoor_reader_end',
+      prompt: 'You meet the beast knowing its every habit. It dies surprised.',
+      options: [
+        MasterworkOption(
+          text: 'Pack the spoils.',
+          isSuccess: true,
+          energyCost: 16,
+          feedback: 'You are Spoor-Reader. You know your enemy before it knows you.',
+          subSpecPath: 'wayfinding_spoor_reader',
+        ),
+      ],
+    ),
+  },
+);
 ```
 
 #### 15. Loremaster Lvl 20 — *The Polyphonic Reading*
 
 ```dart
-// Framing: "The Codex offers two roads to deeper reading."
-// Branch A: "Read across all subjects" → Polymath
-// Branch B: "Read the languages between" → Translator
+static final MasterworkTask loreLvl20Loremaster = MasterworkTask(
+  id: 'task_lvl20_lore_loremaster',
+  skillType: SkillType.lore,
+  levelGate: 20,
+  title: 'The Polyphonic Reading',
+  description: 'The Codex lies open. Two roads to deeper reading present themselves.',
+  startStepId: 'start',
+  steps: {
+    'start': MasterworkStep(
+      id: 'start',
+      prompt: 'You can read across all the subjects at once, sharpening every skill the Codex touches. Or you can read the languages between the subjects, finding the meanings the puzzles only hint at.',
+      options: [
+        MasterworkOption(
+          text: 'Read across — every fragment teaches every skill.',
+          nextStepId: 'polymath_end',
+          feedback: 'You let the readings inform every craft. The cartographer watches you with new interest.',
+        ),
+        MasterworkOption(
+          text: 'Read between — every fragment teaches you how to read the next.',
+          nextStepId: 'translator_end',
+          feedback: 'You begin to see the metalanguage. Puzzles unfold faster under your hand.',
+        ),
+      ],
+    ),
+    'polymath_end': MasterworkStep(
+      id: 'polymath_end',
+      prompt: 'Every page now feeds every skill. Your hands learn from your reading.',
+      options: [
+        MasterworkOption(
+          text: 'Set the book down.',
+          isSuccess: true,
+          energyCost: 14,
+          feedback: 'You are Polymath. Every fragment makes you better at everything.',
+          subSpecPath: 'lore_polymath',
+        ),
+      ],
+    ),
+    'translator_end': MasterworkStep(
+      id: 'translator_end',
+      prompt: 'The puzzles open easier under your eye now. The patterns are visible where before they were guesses.',
+      options: [
+        MasterworkOption(
+          text: 'Close the Codex.',
+          isSuccess: true,
+          energyCost: 12,
+          feedback: 'You are Translator. The languages between the words now belong to you.',
+          subSpecPath: 'lore_translator',
+        ),
+      ],
+    ),
+  },
+);
 ```
 
 #### 16. Glyph-Carver Lvl 20 — *The Twin Glyphs*
 
 ```dart
-// Framing: "Two clay tablets, two glyphs."
-// Branch A: "Weave the runes carefully" → Rune-Weaver
-// Branch B: "Engrave them deep, with a new method" → Engraver
+static final MasterworkTask loreLvl20GlyphCarver = MasterworkTask(
+  id: 'task_lvl20_lore_glyph_carver',
+  skillType: SkillType.lore,
+  levelGate: 20,
+  title: 'The Twin Glyphs',
+  description: 'Two clay tablets. Two glyphs. One method per side.',
+  startStepId: 'start',
+  steps: {
+    'start': MasterworkStep(
+      id: 'start',
+      prompt: 'You can weave the runes carefully, layered fine, so each glyph holds more than one casting. Or you can engrave them deep, with a new method that opens up glyph patterns never before written.',
+      options: [
+        MasterworkOption(
+          text: 'Weave the runes carefully. Each glyph carries more.',
+          nextStepId: 'rune_weaver_end',
+          requiredItemId: 'river_clay',
+          requiredItemCount: 4,
+          feedback: 'You layer the runes in concentric coils. Each tablet, when finished, hums with reserve.',
+        ),
+        MasterworkOption(
+          text: 'Engrave them deep, in a new method. New glyphs become possible.',
+          nextStepId: 'engraver_end',
+          requiredItemId: 'nightshade',
+          requiredItemCount: 2,
+          feedback: 'You ink the nightshade into the engraver\'s well and cut deeper than tradition allows. The new shapes resolve into a pattern that\'s never been written.',
+        ),
+      ],
+    ),
+    'rune_weaver_end': MasterworkStep(
+      id: 'rune_weaver_end',
+      prompt: 'Each glyph rings with more castings than tradition allows.',
+      options: [
+        MasterworkOption(
+          text: 'Wrap the tablets.',
+          isSuccess: true,
+          energyCost: 18,
+          feedback: 'You are Rune-Weaver. Every glyph from your hand carries more than it should.',
+          subSpecPath: 'lore_rune_weaver',
+        ),
+      ],
+    ),
+    'engraver_end': MasterworkStep(
+      id: 'engraver_end',
+      prompt: 'The deep-cut glyphs open into shapes no Lore Keeper has recorded. New blueprints unfold in your mind.',
+      options: [
+        MasterworkOption(
+          text: 'Press the new patterns into your journal.',
+          isSuccess: true,
+          energyCost: 22,
+          feedback: 'You are Engraver. New glyphs are now possible because of you.',
+          subSpecPath: 'lore_engraver',
+        ),
+      ],
+    ),
+  },
+);
 ```
 
-For trials 2 + 4–16, the structure is identical to trial 1 (Berserker). Each has `start` step + two branch terminal steps. Full text expanded during implementation (sample shown in trial 1 + reference to Greater Ironbark in §4 of brainstorm). **Engineers writing these follow the trial 1 / trial 3 pattern with the framing and branch hints listed above.** Estimated 200–300 words per trial; ~3500 words total for all 16.
+**Registry:** All 16 trials added to `MasterworkTasks.all` and `MasterworkTasks.findById`. Total writing: ~3500 words across 16 trials. Each trial follows the same 4-step pattern (start with two branch options, plus one terminal step per branch). Implementation is a straight copy from the spec into `lib/models/masterwork.dart`.
 
 ### 4.8 Skills view spec badges
 
