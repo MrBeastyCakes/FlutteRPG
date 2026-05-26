@@ -1484,6 +1484,165 @@ class MasterworkTasks {
     },
   );
 
+  static final MasterworkTask cleansingWilds = MasterworkTask(
+    id: 'cleansing_wilds',
+    skillType: SkillType.lore,
+    levelGate: 1,
+    title: 'Burning the Hollow',
+    description: 'The Wilds Echo Essence sits in the Town Center fire. The flame won\'t take. The cartographer watches.',
+    startStepId: 'start',
+    steps: {
+      'start': const MasterworkStep(
+        id: 'start',
+        prompt: 'The Essence won\'t catch. The cartographer hands you a thin bundle of dry kindling. "You\'ll need to speak to it. The Wilds want a word, not an offering. Make a name for the place."',
+        options: [
+          MasterworkOption(
+            text: 'Name the Hollow as the Warden named it in her last journal.',
+            nextStepId: 'wardens_name',
+            requiredSkill: SkillType.lore,
+            requiredLevel: 5,
+            feedback: 'You speak the name the Warden wrote in her last entry. The Essence flares green.',
+          ),
+          MasterworkOption(
+            text: 'Name the Hollow yourself, in your own tongue.',
+            nextStepId: 'own_name',
+            feedback: 'You speak a name of your own choosing. The Essence smolders, uncertain.',
+          ),
+        ],
+      ),
+      'wardens_name': const MasterworkStep(
+        id: 'wardens_name',
+        prompt: 'The Essence burns clean, green-gold. The Hollow speaks once, softly, in a voice you almost recognize. Then silence.',
+        options: [
+          MasterworkOption(
+            text: 'Take what remains from the ashes.',
+            isSuccess: true,
+            energyCost: 8,
+            feedback: 'A small carved seed-shape sits in the ash, warm to the touch. The Wilds Breach is sealed.',
+          ),
+        ],
+      ),
+      'own_name': const MasterworkStep(
+        id: 'own_name',
+        prompt: 'The Essence burns dim. Your name does not catch. The cartographer murmurs the Warden\'s name; the flame catches at last.',
+        options: [
+          MasterworkOption(
+            text: 'Take what remains from the ashes.',
+            isSuccess: true,
+            energyCost: 10,
+            feedback: 'A small carved seed-shape sits in the ash, warm to the touch. The Wilds Breach is sealed — though the cartographer notes the name to remember next time.',
+          ),
+        ],
+      ),
+    },
+  );
+
+  static final MasterworkTask cleansingStone = MasterworkTask(
+    id: 'cleansing_stone',
+    skillType: SkillType.lore,
+    levelGate: 1,
+    title: 'Quieting the Wound',
+    description: 'The Stone Echo Essence sits in the Town Center fire. It hums in your hand, three slow taps, three slow taps. The cartographer covers his ears.',
+    startStepId: 'start',
+    steps: {
+      'start': const MasterworkStep(
+        id: 'start',
+        prompt: 'The Essence won\'t burn. It taps against the iron bowl, three then three. The cartographer hands you a small lead bell. "Strike the bell on the off-beats. Drown out the rhythm. Then it will burn."',
+        options: [
+          MasterworkOption(
+            text: 'Strike the bell on the silences between the taps.',
+            nextStepId: 'silence_match',
+            feedback: 'You ring on the half-beats. The Essence\'s rhythm falters, then breaks. The flame takes.',
+          ),
+          MasterworkOption(
+            text: 'Ring the bell continuously to drown the taps entirely.',
+            nextStepId: 'continuous_ring',
+            energyCost: 12,
+            feedback: 'You ring without pause. The cavern in your mind goes dark. The flame catches; you ring until your arms ache.',
+          ),
+        ],
+      ),
+      'silence_match': const MasterworkStep(
+        id: 'silence_match',
+        prompt: 'The Essence burns cool blue, then grey. The taps stop. You hear, for the first time in weeks, the sound of your own pulse.',
+        options: [
+          MasterworkOption(
+            text: 'Take what remains from the ashes.',
+            isSuccess: true,
+            energyCost: 6,
+            feedback: 'A smooth stone disc sits in the cooling ash, cold and silent. The Stone Breach is sealed.',
+          ),
+        ],
+      ),
+      'continuous_ring': const MasterworkStep(
+        id: 'continuous_ring',
+        prompt: 'The Essence burns through. The taps stop, finally. You realize you are still ringing the bell. You set it down.',
+        options: [
+          MasterworkOption(
+            text: 'Take what remains from the ashes.',
+            isSuccess: true,
+            energyCost: 8,
+            feedback: 'A smooth stone disc sits in the ash. You\'re exhausted but the Stone Breach is sealed.',
+          ),
+        ],
+      ),
+    },
+  );
+
+  static final MasterworkTask cleansingTide = MasterworkTask(
+    id: 'cleansing_tide',
+    skillType: SkillType.lore,
+    levelGate: 1,
+    title: 'Lighting the Forgotten Lamp',
+    description: 'The Tide Echo Essence sits in the Town Center fire. It will not burn; it weeps brine. The cartographer brings out an old keeper\'s lamp.',
+    startStepId: 'start',
+    steps: {
+      'start': const MasterworkStep(
+        id: 'start',
+        prompt: 'The cartographer sets the lamp beside the Essence. "The Keeper\'s notes said the lamp sang a note that kept the wrong things at bay. The Essence will burn only if you can light the lamp and sing that note. But the note has been forgotten."',
+        options: [
+          MasterworkOption(
+            text: 'Recall the Keeper\'s description and hum the note from memory.',
+            nextStepId: 'memory_note',
+            requiredSkill: SkillType.lore,
+            requiredLevel: 5,
+            feedback: 'You hum a long low note. The lamp catches; the Essence catches with it.',
+          ),
+          MasterworkOption(
+            text: 'Let the Essence guide your voice — sing what it wants you to sing.',
+            nextStepId: 'guided_note',
+            energyCost: 10,
+            feedback: 'You open your throat and let the Essence pull the note out of you. It is not your voice; you are not entirely sure it stops being your voice afterward.',
+          ),
+        ],
+      ),
+      'memory_note': const MasterworkStep(
+        id: 'memory_note',
+        prompt: 'The lamp burns steady. The Essence burns with it, brine-blue. The note holds. The cartographer dabs his eyes.',
+        options: [
+          MasterworkOption(
+            text: 'Take what remains from the ashes.',
+            isSuccess: true,
+            energyCost: 6,
+            feedback: 'A salt-crusted shell-fragment sits in the ash, humming quietly. The Tide Breach is sealed.',
+          ),
+        ],
+      ),
+      'guided_note': const MasterworkStep(
+        id: 'guided_note',
+        prompt: 'The lamp burns. The Essence burns. The note holds. You stop singing eventually. The cartographer hands you a cup of water.',
+        options: [
+          MasterworkOption(
+            text: 'Take what remains from the ashes.',
+            isSuccess: true,
+            energyCost: 12,
+            feedback: 'A salt-crusted shell-fragment sits in the ash, humming quietly. The Tide Breach is sealed.',
+          ),
+        ],
+      ),
+    },
+  );
+
   static final List<MasterworkTask> all = [
     woodcuttingLvl10,
     miningLvl10,
@@ -1509,6 +1668,9 @@ class MasterworkTasks {
     craftingLvl20Tinker,
     combatLvl20Berserker,
     combatLvl20Guardian,
+    cleansingWilds,
+    cleansingStone,
+    cleansingTide,
   ];
 
   static MasterworkTask? findForSkill(SkillType skill, int level, [String? spec]) {

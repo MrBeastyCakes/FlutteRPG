@@ -87,6 +87,9 @@ class CombatState {
   final DateTime? roundDeadline;
   final int? pendingQuickslotIndex;
   final int currentRoundNumber;
+  final int activePhaseIndex;
+  final BeastAbility? activePhaseAbility;
+  final BeastPassive? activePhasePassive;
 
   const CombatState({
     required this.beast,
@@ -100,6 +103,9 @@ class CombatState {
     this.roundDeadline,
     this.pendingQuickslotIndex,
     this.currentRoundNumber = 1,
+    this.activePhaseIndex = -1,
+    this.activePhaseAbility,
+    this.activePhasePassive,
   });
 
   CombatState copyWith({
@@ -117,6 +123,11 @@ class CombatState {
     int? pendingQuickslotIndex,
     bool clearPendingQuickslotIndex = false,
     int? currentRoundNumber,
+    int? activePhaseIndex,
+    BeastAbility? activePhaseAbility,
+    BeastPassive? activePhasePassive,
+    bool clearActivePhaseAbility = false,
+    bool clearActivePhasePassive = false,
   }) {
     return CombatState(
       beast: beast ?? this.beast,
@@ -130,6 +141,9 @@ class CombatState {
       roundDeadline: roundDeadline ?? this.roundDeadline,
       pendingQuickslotIndex: clearPendingQuickslotIndex ? null : (pendingQuickslotIndex ?? this.pendingQuickslotIndex),
       currentRoundNumber: currentRoundNumber ?? this.currentRoundNumber,
+      activePhaseIndex: activePhaseIndex ?? this.activePhaseIndex,
+      activePhaseAbility: clearActivePhaseAbility ? null : (activePhaseAbility ?? this.activePhaseAbility),
+      activePhasePassive: clearActivePhasePassive ? null : (activePhasePassive ?? this.activePhasePassive),
     );
   }
 }
@@ -660,6 +674,18 @@ class GameEngine extends ChangeNotifier {
     if (action.id == 'wharfmaster_travel') {
       return _engineFlags.contains('wharfmaster_pier_visible');
     }
+    if (action.id == 'hunt_echo_of_tide') {
+      return _engineFlags.contains('drowned_lighthouse_spoken');
+    }
+    if (action.id == 'burn_wilds_echo_essence') {
+      return _inventory.hasItem('wilds_echo_essence', 1) && !_engineFlags.contains('breach_wilds_cleansed');
+    }
+    if (action.id == 'burn_stone_echo_essence') {
+      return _inventory.hasItem('stone_echo_essence', 1) && !_engineFlags.contains('breach_stone_cleansed');
+    }
+    if (action.id == 'burn_tide_echo_essence') {
+      return _inventory.hasItem('tide_echo_essence', 1) && !_engineFlags.contains('breach_tide_cleansed');
+    }
     return true;
   }
 
@@ -750,6 +776,7 @@ class GameEngine extends ChangeNotifier {
       checkShopRestock();
     }
 
+    _checkMilestones();
     notifyListeners();
   }
 
@@ -2070,7 +2097,27 @@ class GameEngine extends ChangeNotifier {
       unlockZone('sundered_coast_3');
     }
     if (action.id == 'approach_lamp_room') {
-      log("Something stirs in the shadows of the lamp room... (Echo encounters deferred)", LogType.warning);
+      if (!_engineFlags.contains('drowned_lighthouse_spoken')) {
+        _engineFlags.add('drowned_lighthouse_spoken');
+        log("You approach the lamp room at the top of the lighthouse. The air is cold and smelling of salt. A voice whispers from the dark...", LogType.worldEvent);
+        _checkMilestones();
+      }
+    }
+
+    if (action.id == 'burn_wilds_echo_essence') {
+      _inventory = _inventory.removeItem('wilds_echo_essence', 1);
+      _startCleansingRitual('wilds');
+      return;
+    }
+    if (action.id == 'burn_stone_echo_essence') {
+      _inventory = _inventory.removeItem('stone_echo_essence', 1);
+      _startCleansingRitual('stone');
+      return;
+    }
+    if (action.id == 'burn_tide_echo_essence') {
+      _inventory = _inventory.removeItem('tide_echo_essence', 1);
+      _startCleansingRitual('tide');
+      return;
     }
 
     // Fragment drops by action id
@@ -2777,26 +2824,31 @@ class GameEngine extends ChangeNotifier {
       // Challenge finished!
       final skillType = _activeMasterwork!.task.skillType;
       final taskTitle = _activeMasterwork!.task.title;
+      final taskId = _activeMasterwork!.task.id;
       _activeMasterwork = null;
 
       if (option.isSuccess) {
-        // Unlock cap!
-        final oldSkill = _skills[skillType]!;
-        final newSkill = oldSkill.unlockCap();
-        _skills[skillType] = newSkill;
+        if (taskId.startsWith('cleansing_')) {
+          _onCleansingComplete(taskId.substring('cleansing_'.length));
+        } else {
+          // Unlock cap!
+          final oldSkill = _skills[skillType]!;
+          final newSkill = oldSkill.unlockCap();
+          _skills[skillType] = newSkill;
 
-        if (option.specPath != null) {
-          _skillSpecs[skillType] = option.specPath!;
-          log("You have walked the ${_specDisplayName(option.specPath!)} path. Forevermore, your craft knows your name.", LogType.success);
-        }
-        if (option.subSpecPath != null) {
-          _skillSubSpecs[skillType] = option.subSpecPath!;
-          log("You have refined further into ${_subSpecDisplayName(option.subSpecPath!)}.", LogType.success);
-        }
+          if (option.specPath != null) {
+            _skillSpecs[skillType] = option.specPath!;
+            log("You have walked the ${_specDisplayName(option.specPath!)} path. Forevermore, your craft knows your name.", LogType.success);
+          }
+          if (option.subSpecPath != null) {
+            _skillSubSpecs[skillType] = option.subSpecPath!;
+            log("You have refined further into ${_subSpecDisplayName(option.subSpecPath!)}.", LogType.success);
+          }
 
-        log("CONGRATULATIONS! You completed the '$taskTitle' Masterwork Trial!", LogType.levelUp);
-        log("Your ${skillType.name} level cap is unlocked up to level ${newSkill.levelCap}!", LogType.levelUp);
-        _notifyQuestObservers(MasterworkCompletedEvent(skillType));
+          log("CONGRATULATIONS! You completed the '$taskTitle' Masterwork Trial!", LogType.levelUp);
+          log("Your ${skillType.name} level cap is unlocked up to level ${newSkill.levelCap}!", LogType.levelUp);
+          _notifyQuestObservers(MasterworkCompletedEvent(skillType));
+        }
       } else {
         log("Trial Failed! You couldn't complete the '$taskTitle' challenge. Try again when prepared.", LogType.error);
       }
@@ -3188,7 +3240,7 @@ class GameEngine extends ChangeNotifier {
   // --- Quest & Codex Engine Integration ---
 
   void _notifyQuestObservers(QuestEvent event) {
-    for (final quest in _activeQuests) {
+    for (final quest in List<Quest>.from(_activeQuests)) {
       if (quest.status != QuestStatus.active) continue;
       for (final objective in quest.objectives) {
         if (objective.isComplete) continue;
@@ -3510,9 +3562,13 @@ class GameEngine extends ChangeNotifier {
   void maybeOfferLvl20MasterworkForTest(SkillType s) => _maybeOfferMasterworkQuest(s);
 
   @visibleForTesting
-  void completeMasterworkForTest(String taskId, {String? specPath, String? subSpecPath}) {
+  void completeMasterworkForTest(String taskId, {String? specPath, String? subSpecPath, bool useFirstSuccessOption = false}) {
     final task = MasterworkTasks.findById(taskId);
     if (task == null) return;
+    if (taskId.startsWith('cleansing_')) {
+      _onCleansingComplete(taskId.substring('cleansing_'.length));
+      return;
+    }
     _skills[task.skillType] = _skills[task.skillType]!.unlockCap();
     if (specPath != null) {
       _skillSpecs[task.skillType] = specPath;
@@ -3616,13 +3672,16 @@ class GameEngine extends ChangeNotifier {
     switch (beastId) {
       case 'forest_boar':
       case 'shadow_wolf':
+      case 'echo_of_wilds':
         return CodexTag.wilds;
       case 'cave_spider':
       case 'cavern_troll':
+      case 'echo_of_stone':
         return CodexTag.stone;
       case 'tide_hound':
       case 'brine_crawler':
       case 'salt_touched_drowned':
+      case 'echo_of_tide':
         return CodexTag.tide;
       default:
         return null;
@@ -3754,6 +3813,10 @@ class GameEngine extends ChangeNotifier {
         if (_skillSubSpecs[SkillType.combat] == 'combat_reaper') {
           critChance += 0.15;
         }
+        // reducedAccuracy (Tide P2) - halve crit chance
+        if (state.activePhasePassive == BeastPassive.reducedAccuracy) {
+          critChance *= 0.5;
+        }
         wasCrit = _random.nextDouble() < critChance;
         if (wasCrit) {
           final isReaper = _skillSubSpecs[SkillType.combat] == 'combat_reaper';
@@ -3761,6 +3824,10 @@ class GameEngine extends ChangeNotifier {
         }
 
         playerDmgDealt = (baseDmg * dmgMultiplier).round();
+        // damageReduction (Stone P2) - reduce damage by 25%
+        if (state.activePhasePassive == BeastPassive.damageReduction) {
+          playerDmgDealt = (playerDmgDealt * 0.75).round();
+        }
         if (playerDmgDealt < 1) playerDmgDealt = 1;
 
         if (wasCrit) {
@@ -3934,6 +4001,23 @@ class GameEngine extends ChangeNotifier {
         break;
     }
 
+    // Check phase transition
+    _checkEchoPhaseTransition();
+
+    // Apply healOnHit passive if active and beast is not defeated
+    if (_activeCombat != null &&
+        _activeCombat!.beastCurrentHealth > 0 &&
+        _activeCombat!.activePhasePassive == BeastPassive.healOnHit) {
+      final healed = (_activeCombat!.beastCurrentHealth + 3).clamp(0, beast.maxHealth);
+      final updatedLog2 = List<String>.from(_activeCombat!.combatLog);
+      updatedLog2.add("💚 The Echo healed 3 HP from its passive vines.");
+      _activeCombat = _activeCombat!.copyWith(
+        beastCurrentHealth: healed,
+        combatLog: updatedLog2,
+      );
+      log("The Echo healed 3 HP.", LogType.info);
+    }
+
     // Check end conditions
     if (_activeCombat!.beastCurrentHealth <= 0) {
       updatedLog.add("🎉 ${beast.name} has been defeated!");
@@ -3980,8 +4064,14 @@ class GameEngine extends ChangeNotifier {
     final state = _activeCombat!;
     final ability = state.beast.ability;
     if (ability == null) return;
+    
+    // enrage (P3) - reduce cooldown
+    final effectiveCooldown = (state.activePhasePassive == BeastPassive.enrage)
+        ? max(1, ability.cooldownRounds - 1)
+        : ability.cooldownRounds;
+
     // Telegraph fires N-1 rounds in (so on round N, ability triggers)
-    if (state.roundsSinceLastTelegraph >= ability.cooldownRounds - 1) {
+    if (state.roundsSinceLastTelegraph >= effectiveCooldown - 1) {
       final wasRevealed = state.activeTelegraph?.reveal ?? false;
       _activeCombat = state.copyWith(
         activeTelegraph: BeastTelegraph(
@@ -4000,14 +4090,130 @@ class GameEngine extends ChangeNotifier {
   }
 
   void _onBeastDefeated(Beast beast) {
+    if (beast.id == 'echo_of_wilds') {
+      log("The Echo collapses into a brittle husk. A green mote pulses where its heart was — you pluck it free. Carry it home. Burn it where the cartographer keeps his fire.", LogType.worldEvent);
+      playSfx('ui_masterwork_complete');
+      _unlockAndAdvanceObjective('main_cleanse_hollow', 'echo_wilds_defeated');
+    }
+    if (beast.id == 'echo_of_stone') {
+      log("The Echo cracks open like a geode. A cold crystalline mote slides into your palm. Carry it home. Burn it at the town center.", LogType.worldEvent);
+      playSfx('ui_masterwork_complete');
+      _unlockAndAdvanceObjective('main_cleanse_vein', 'echo_stone_defeated');
+    }
+    if (beast.id == 'echo_of_tide') {
+      log("The Echo recedes into the surf, leaving a briny mote behind that pulses faintly in your hand. Carry it home. Burn it at the town center.", LogType.worldEvent);
+      playSfx('ui_masterwork_complete');
+      _unlockAndAdvanceObjective('main_cleanse_tide', 'echo_tide_defeated');
+    }
     if (_playerAction != null) {
       _playerAction = _playerAction!.copyWith(progress: 1.0);
       _completePlayerAction();
     }
   }
 
+  void _unlockAndAdvanceObjective(String questId, String targetId) {
+    for (final quest in List<Quest>.from(_activeQuests)) {
+      if (quest.id == questId) {
+        for (final obj in quest.objectives) {
+          if (obj.targetId == targetId) {
+            obj.comingSoon = false;
+            obj.currentCount = obj.targetCount;
+          }
+        }
+        _maybeCompleteQuest(quest);
+      }
+    }
+  }
+
   void _onPlayerDefeated() {
     faint();
+  }
+
+  void _checkEchoPhaseTransition() {
+    if (_activeCombat == null) return;
+    final beast = _activeCombat!.beast;
+    if (beast.phases == null) return;
+
+    final hpPct = _activeCombat!.beastCurrentHealth / beast.maxHealth;
+    EchoPhase? currentPhase;
+    for (final phase in beast.phases!) {
+      if (hpPct <= phase.hpThreshold) {
+        currentPhase = phase;
+      }
+    }
+    if (currentPhase == null) return;
+
+    if (_activeCombat!.activePhaseIndex != beast.phases!.indexOf(currentPhase)) {
+      final newIndex = beast.phases!.indexOf(currentPhase);
+      final updatedLog = List<String>.from(_activeCombat!.combatLog);
+      updatedLog.add("⚠️ [Phase Transition] ${currentPhase.entryNarration}");
+      _activeCombat = _activeCombat!.copyWith(
+        activePhaseIndex: newIndex,
+        activePhaseAbility: currentPhase.ability,
+        activePhasePassive: currentPhase.passive,
+        combatLog: updatedLog,
+      );
+      log(currentPhase.entryNarration, LogType.warning);
+      playSfx('ui_info_chime');
+    }
+  }
+
+  void playSfx(String name) {
+    // Audio system not implemented
+  }
+
+  void _startCleansingRitual(String breachTag) {
+    final task = MasterworkTasks.findById('cleansing_$breachTag');
+    if (task == null) return;
+    startMasterworkChallenge(task);
+  }
+
+  void _onCleansingComplete(String breachTag) {
+    setEngineFlag('breach_${breachTag}_cleansed');
+
+    if (!_engineFlags.contains('first_breach_cleansed')) {
+      setEngineFlag('first_breach_cleansed');
+      // Alternate Coast unlock: if first breach cleansed and coast_unlocked is not in _engineFlags, unlock Coast I, Wharfmaster pier, and offer investigate tide quest
+      if (!_engineFlags.contains('coast_unlocked')) {
+        _engineFlags.add('coast_unlocked');
+        _engineFlags.add('wharfmaster_pier_visible');
+        _unlockedZoneIds.add('sundered_coast_1');
+        log("🗺️ New Zone Discovered: Sundered Coast I!", LogType.success);
+        offerQuest(MainQuests.investigateTide());
+      }
+    }
+
+    final tokenId = '${breachTag}_cleansing_token';
+    final token = Items.findById(tokenId);
+    if (token != null) {
+      _inventory = _inventory.addItem(token, 1);
+      log("Obtained: ${token.icon} ${token.name} x1", LogType.success);
+    }
+
+    // Advance cleanse main quest objective
+    for (final quest in List<Quest>.from(_activeQuests)) {
+      for (final obj in quest.objectives) {
+        if (obj.kind == ObjectiveKind.cleanse && obj.targetId == 'breach_$breachTag') {
+          obj.currentCount = obj.targetCount;
+          obj.comingSoon = false;
+        }
+      }
+      _maybeCompleteQuest(quest);
+    }
+
+    // Offer Source Convergence if all three cleansed
+    if (_engineFlags.contains('breach_wilds_cleansed') &&
+        _engineFlags.contains('breach_stone_cleansed') &&
+        _engineFlags.contains('breach_tide_cleansed')) {
+      if (!_activeQuests.any((q) => q.id == 'main_source_convergence') &&
+          !_completedQuests.any((q) => q.id == 'main_source_convergence')) {
+        offerQuest(MainQuests.sourceConvergence());
+      }
+    }
+
+    _checkMilestones();
+    playSfx('ui_masterwork_complete');
+    notifyListeners();
   }
 
   // Quick-Slot State Management APIs
@@ -4397,6 +4603,90 @@ class GameEngine extends ChangeNotifier {
   double getSpecCraftQualityBiasForTest(Recipe recipe, Item resultItem, String stationId) {
     return _getSpecCraftQualityBias(recipe, resultItem, stationId);
   }
+
+  @visibleForTesting
+  void startEchoFightForTest(String beastId) {
+    final beast = Beasts.findById(beastId)!;
+    _activeCombat = CombatState(
+      beast: beast,
+      beastCurrentHealth: beast.maxHealth,
+      playerStartHealth: _playerStats.currentHealth,
+      combatLog: [],
+      roundHistory: const [],
+      roundsSinceLastTelegraph: 0,
+      activeTelegraph: null,
+      pendingStance: null,
+      roundDeadline: DateTime.now().add(const Duration(seconds: 2)),
+      pendingQuickslotIndex: null,
+      currentRoundNumber: 1,
+      activePhaseIndex: 0,
+      activePhaseAbility: beast.phases?.first.ability ?? beast.ability,
+      activePhasePassive: beast.phases?.first.passive,
+    );
+    notifyListeners();
+  }
+
+  @visibleForTesting
+  void setBeastHpForTest(int hp) {
+    if (_activeCombat == null) return;
+    _activeCombat = _activeCombat!.copyWith(beastCurrentHealth: hp);
+  }
+
+  @visibleForTesting
+  void checkEchoPhaseTransitionForTest() => _checkEchoPhaseTransition();
+
+  @visibleForTesting
+  void applyEchoPassiveForTest() {
+    if (_activeCombat == null || _activeCombat!.activePhasePassive != BeastPassive.healOnHit) return;
+    final beast = _activeCombat!.beast;
+    final healed = (_activeCombat!.beastCurrentHealth + 3).clamp(0, beast.maxHealth);
+    _activeCombat = _activeCombat!.copyWith(beastCurrentHealth: healed);
+  }
+
+  @visibleForTesting
+  void unlockZoneForTest(String zoneId) => unlockZone(zoneId);
+
+  @visibleForTesting
+  void runCombatToVictoryForTest(String beastId) {
+    final beast = Beasts.findById(beastId)!;
+    final action = _currentZone.actions.firstWhere((a) => a.isCombat && a.beastId == beastId);
+    _playerAction = ActiveActionState(
+      action: action,
+      progress: 0.0,
+      durationSeconds: 1.0,
+    );
+    _activeCombat = CombatState(
+      beast: beast,
+      beastCurrentHealth: 0,
+      playerStartHealth: _playerStats.currentHealth,
+      combatLog: [],
+      roundHistory: const [],
+      roundsSinceLastTelegraph: 0,
+      activeTelegraph: null,
+      pendingStance: null,
+      roundDeadline: DateTime.now().add(const Duration(seconds: 2)),
+      pendingQuickslotIndex: null,
+      currentRoundNumber: 1,
+    );
+    _onBeastDefeated(beast);
+  }
+
+  @visibleForTesting
+  void completeActionForTest(String actionId) {
+    final action = _currentZone.actions.firstWhere((a) => a.id == actionId);
+    _playerAction = ActiveActionState(
+      action: action,
+      progress: 1.0,
+      durationSeconds: 1.0,
+    );
+    _completePlayerAction();
+  }
+
+  @visibleForTesting
+  bool isFragmentPoolOpenForTest(CodexTag tag) => _isFragmentPoolOpen(tag);
+
+  @visibleForTesting
+  Set<String> get firedMilestoneIdsForTest => firedMilestoneIds;
 
   @override
   void dispose() {

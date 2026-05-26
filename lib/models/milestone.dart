@@ -162,6 +162,80 @@ class Milestones {
     onFire: null,
   );
 
+
+  static final MilestoneEvent bloomwitherEntered = MilestoneEvent(
+    id: 'bloomwither_entered',
+    severity: MilestoneSeverity.major,
+    title: 'The Hollow Speaks',
+    body: "The trees here stand wrong, and a deeper wrong watches from the heart of the hollow. The Warden's old advice runs through your mind — an Ironbark log, well-seasoned, and three Wildflowers cut at first light, burned at the rotted shrine within. But first: what waits in the Hollow will not let you near without a fight. Defeat it. Wrest its essence. Return to Town Square and burn the essence at the town center. That is how a Breach is sealed.",
+    icon: '🌿',
+    trigger: (engine) => engine.regionStatus.containsKey('whispering_woods_3'),
+    onFire: null,
+  );
+
+  static final MilestoneEvent glowingVeinEntered = MilestoneEvent(
+    id: 'glowing_vein_entered',
+    severity: MilestoneSeverity.major,
+    title: 'The Vein Pulses',
+    body: "The Glinting Vein is no vein — it is a wound. The foreman's last writing speaks of an alchemist's draught — wildflower tinctured with river clay, twice-distilled — that calms the pulse. The thing inside the wound will rise to defend it. Endure the rising. Then carry the wound's essence home, and burn it at the town center.",
+    icon: '💎',
+    trigger: (engine) => engine.regionStatus.containsKey('darkstone_mine_3'),
+    onFire: null,
+  );
+
+  static final MilestoneEvent drownedLighthouseSpoken = MilestoneEvent(
+    id: 'drowned_lighthouse_spoken',
+    severity: MilestoneSeverity.major,
+    title: 'The Lamp Speaks',
+    body: "You climb the lighthouse stairs. The lamp room is silent — but not empty. The keeper's last page warned you: do not relight the lamp with oil; carry a Salt Crystal — the pure kind from the deep tide pools — and set it within the lamp's heart. Something old in the sea will rise to silence the song. Do not let it. When you have its essence, carry it home and burn it at the town center.",
+    icon: '🌊',
+    trigger: (engine) => engine.engineFlags.contains('drowned_lighthouse_spoken'),
+    onFire: null,
+  );
+
+  static final MilestoneEvent breachWildsCleansedMilestone = MilestoneEvent(
+    id: 'breach_wilds_cleansed_milestone',
+    severity: MilestoneSeverity.major,
+    title: 'The Forest Returns',
+    body: "The forest hush returns. Birds are singing in the eastern groves for the first time in months. The Warden's gate has opened on its own.",
+    icon: '🌿',
+    trigger: (engine) => engine.engineFlags.contains('breach_wilds_cleansed'),
+    onFire: null,
+  );
+
+  static final MilestoneEvent breachStoneCleansedMilestone = MilestoneEvent(
+    id: 'breach_stone_cleansed_milestone',
+    severity: MilestoneSeverity.major,
+    title: 'The Foreman Returns',
+    body: "The tapping stops in your dreams. The foreman is found, alive, sitting at the lip of the deepest shaft. He does not remember the year. He cries when he sees the sun.",
+    icon: '💎',
+    trigger: (engine) => engine.engineFlags.contains('breach_stone_cleansed'),
+    onFire: null,
+  );
+
+  static final MilestoneEvent breachTideCleansedMilestone = MilestoneEvent(
+    id: 'breach_tide_cleansed_milestone',
+    severity: MilestoneSeverity.major,
+    title: 'The Lamp Lights Itself',
+    body: "The Lighthouse lamp lights itself at dusk. The Drowned are gone from the pier. The salt smells like salt again.",
+    icon: '🌊',
+    trigger: (engine) => engine.engineFlags.contains('breach_tide_cleansed'),
+    onFire: null,
+  );
+
+  static final MilestoneEvent allBreachesCleansedMilestone = MilestoneEvent(
+    id: 'all_breaches_cleansed_milestone',
+    severity: MilestoneSeverity.major,
+    title: 'The Bells Ring',
+    body: "Town Square's bells ring without being struck. Somewhere, a stone door opens beneath the world. The cartographer hands you a key you have never seen before.",
+    icon: '🔔',
+    trigger: (engine) =>
+        engine.engineFlags.contains('breach_wilds_cleansed') &&
+        engine.engineFlags.contains('breach_stone_cleansed') &&
+        engine.engineFlags.contains('breach_tide_cleansed'),
+    onFire: (engine) => engine.setEngineFlag('nexus_unlockable'),
+  );
+
   static final List<MilestoneEvent> all = [
     townSquareRestored,
     firstCodexFragment,
@@ -175,5 +249,12 @@ class Milestones {
     sourcePoolOpens,
     synthesisApproaching,
     synthesisUnlocked,
+    bloomwitherEntered,
+    glowingVeinEntered,
+    drownedLighthouseSpoken,
+    breachWildsCleansedMilestone,
+    breachStoneCleansedMilestone,
+    breachTideCleansedMilestone,
+    allBreachesCleansedMilestone,
   ];
 }

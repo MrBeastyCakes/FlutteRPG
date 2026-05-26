@@ -909,6 +909,96 @@ class Items {
     value: 50,
   );
 
+  static const Item ironbarkLog = Item(
+    id: 'ironbark_log',
+    name: 'Ironbark Log',
+    description: 'A log of true Ironbark, rare and impossibly hard. Sought by master weaponsmiths.',
+    icon: '🪵',
+    type: ItemType.resource,
+    value: 50,
+  );
+
+  static const Item glintingOre = Item(
+    id: 'glinting_ore',
+    name: 'Glinting Ore',
+    description: 'A pulsing chunk of stone that glows faintly without flame. Heavier than it should be.',
+    icon: '💎',
+    type: ItemType.resource,
+    value: 55,
+  );
+
+  static const Item corruptedWildflower = Item(
+    id: 'corrupted_wildflower',
+    name: 'Corrupted Wildflower',
+    description: 'A bluebell veined with black sap. Smells of old iron. Useful as a crafting modifier.',
+    icon: '🪻',
+    type: ItemType.resource,
+    value: 30,
+  );
+
+  static const Item corruptedIronDust = Item(
+    id: 'corrupted_iron_dust',
+    name: 'Corrupted Iron Dust',
+    description: 'A fine glittering dust skimmed from the Glinting wall. Pungent. Used as a crafting modifier.',
+    icon: '🧂',
+    type: ItemType.resource,
+    value: 35,
+  );
+
+  static const Item wildsEchoEssence = Item(
+    id: 'wilds_echo_essence',
+    name: 'Wilds Echo Essence',
+    description: 'A pulsing green mote you tore from the Echo of the Wilds. Carry it to the Town Center and burn it.',
+    icon: '🌿',
+    type: ItemType.resource,
+    value: 0,
+  );
+
+  static const Item stoneEchoEssence = Item(
+    id: 'stone_echo_essence',
+    name: 'Stone Echo Essence',
+    description: 'A cold crystalline mote you wrested from the Echo of the Stone. Carry it to the Town Center and burn it.',
+    icon: '💎',
+    type: ItemType.resource,
+    value: 0,
+  );
+
+  static const Item tideEchoEssence = Item(
+    id: 'tide_echo_essence',
+    name: 'Tide Echo Essence',
+    description: 'A briny pulsing mote you pulled from the Echo of the Tide. Carry it to the Town Center and burn it.',
+    icon: '🌊',
+    type: ItemType.resource,
+    value: 0,
+  );
+
+  static const Item wildsCleansingToken = Item(
+    id: 'wilds_cleansing_token',
+    name: 'Wilds Cleansing Token',
+    description: 'A small carved seed-shape, warm to the touch. Proof that the Wilds breach is sealed.',
+    icon: '🟢',
+    type: ItemType.resource,
+    value: 0,
+  );
+
+  static const Item stoneCleansingToken = Item(
+    id: 'stone_cleansing_token',
+    name: 'Stone Cleansing Token',
+    description: 'A smooth stone disc, cold and silent. Proof that the Stone breach is sealed.',
+    icon: '⚪',
+    type: ItemType.resource,
+    value: 0,
+  );
+
+  static const Item tideCleansingToken = Item(
+    id: 'tide_cleansing_token',
+    name: 'Tide Cleansing Token',
+    description: 'A salt-crusted shell-fragment that hums quietly. Proof that the Tide breach is sealed.',
+    icon: '🔵',
+    type: ItemType.resource,
+    value: 0,
+  );
+
   static const List<Item> all = [
     heartwood,
     oakLog,
@@ -991,7 +1081,16 @@ class Items {
     kelpWrap,
     pearlTonic,
     brineStabilizer,
-    heartwood,
+    ironbarkLog,
+    glintingOre,
+    corruptedWildflower,
+    corruptedIronDust,
+    wildsEchoEssence,
+    stoneEchoEssence,
+    tideEchoEssence,
+    wildsCleansingToken,
+    stoneCleansingToken,
+    tideCleansingToken,
   ];
 
   static Item? findById(String id) {

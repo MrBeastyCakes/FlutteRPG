@@ -10,6 +10,28 @@ enum BeastSpecialEffect {
   accuracyDebuff,
 }
 
+enum BeastPassive {
+  none,
+  healOnHit,
+  damageReduction,
+  reducedAccuracy,
+  enrage,
+}
+
+class EchoPhase {
+  final double hpThreshold;
+  final BeastAbility ability;
+  final String entryNarration;
+  final BeastPassive passive;
+
+  const EchoPhase({
+    required this.hpThreshold,
+    required this.ability,
+    required this.entryNarration,
+    this.passive = BeastPassive.none,
+  });
+}
+
 class BeastAbility {
   final String id;
   final String name;
@@ -36,6 +58,7 @@ class Beast {
   final int xpReward;
   final List<LootDrop> lootTable;
   final BeastAbility? ability; // NEW
+  final List<EchoPhase>? phases; // NEW
 
   const Beast({
     required this.id,
@@ -47,6 +70,7 @@ class Beast {
     required this.xpReward,
     required this.lootTable,
     this.ability, // NEW
+    this.phases, // NEW
   });
 }
 
@@ -198,6 +222,93 @@ class Beasts {
     ),
   );
 
+  static const BeastAbility _strangleVines = BeastAbility(
+    id: 'strangle_vines',
+    name: 'Strangle Vines',
+    cooldownRounds: 3,
+    telegraphText: 'Roots burst around your feet.',
+    effect: BeastSpecialEffect.drainOverTime,
+  );
+
+  static const Beast echoOfWilds = Beast(
+    id: 'echo_of_wilds',
+    name: 'Echo of the Wilds',
+    icon: '👁️',
+    maxHealth: 240,
+    attackPower: 18,
+    defense: 4,
+    xpReward: 280,
+    lootTable: [
+      LootDrop(item: Items.wildsEchoEssence, chance: 1.0, minQuantity: 1, maxQuantity: 1),
+      LootDrop(item: Items.ironbarkLog, chance: 0.50, minQuantity: 1, maxQuantity: 2),
+      LootDrop(item: Items.wolfPelt, chance: 0.40, minQuantity: 1, maxQuantity: 1),
+    ],
+    ability: _strangleVines,
+    phases: [
+      EchoPhase(hpThreshold: 1.0, ability: _strangleVines, entryNarration: 'You face the Echo of the Wilds.', passive: BeastPassive.none),
+      EchoPhase(hpThreshold: 0.66, ability: _strangleVines, entryNarration: 'The Echo trembles — vines knit closed its wounds. It heals as it fights.', passive: BeastPassive.healOnHit),
+      EchoPhase(hpThreshold: 0.33, ability: _strangleVines, entryNarration: 'The Hollow itself rises against you. The Echo will not slow.', passive: BeastPassive.enrage),
+    ],
+  );
+
+  static const BeastAbility _quake = BeastAbility(
+    id: 'quake',
+    name: 'Quake',
+    cooldownRounds: 3,
+    telegraphText: 'The cavern wall groans.',
+    effect: BeastSpecialEffect.bigHitStun,
+  );
+
+  static const Beast echoOfStone = Beast(
+    id: 'echo_of_stone',
+    name: 'Echo of the Stone',
+    icon: '👁️',
+    maxHealth: 280,
+    attackPower: 16,
+    defense: 8,
+    xpReward: 320,
+    lootTable: [
+      LootDrop(item: Items.stoneEchoEssence, chance: 1.0, minQuantity: 1, maxQuantity: 1),
+      LootDrop(item: Items.glintingOre, chance: 0.50, minQuantity: 1, maxQuantity: 2),
+      LootDrop(item: Items.trollClaw, chance: 0.40, minQuantity: 1, maxQuantity: 1),
+    ],
+    ability: _quake,
+    phases: [
+      EchoPhase(hpThreshold: 1.0, ability: _quake, entryNarration: 'You face the Echo of the Stone.', passive: BeastPassive.none),
+      EchoPhase(hpThreshold: 0.66, ability: _quake, entryNarration: "The Echo's surface hardens to crystal. Your blade rings dull.", passive: BeastPassive.damageReduction),
+      EchoPhase(hpThreshold: 0.33, ability: _quake, entryNarration: "The cavern wall pulses with the Echo's heartbeat. It will not be slowed.", passive: BeastPassive.enrage),
+    ],
+  );
+
+  static const BeastAbility _stormShroud = BeastAbility(
+    id: 'storm_shroud',
+    name: 'Storm Shroud',
+    cooldownRounds: 3,
+    telegraphText: 'The fog thickens. You lose the lamp.',
+    effect: BeastSpecialEffect.accuracyDebuff,
+  );
+
+  static const Beast echoOfTide = Beast(
+    id: 'echo_of_tide',
+    name: 'Echo of the Tide',
+    icon: '👁️',
+    maxHealth: 260,
+    attackPower: 17,
+    defense: 5,
+    xpReward: 300,
+    lootTable: [
+      LootDrop(item: Items.tideEchoEssence, chance: 1.0, minQuantity: 1, maxQuantity: 1),
+      LootDrop(item: Items.pearlShell, chance: 0.50, minQuantity: 1, maxQuantity: 2),
+      LootDrop(item: Items.saltTouchedPelt, chance: 0.40, minQuantity: 1, maxQuantity: 1),
+    ],
+    ability: _stormShroud,
+    phases: [
+      EchoPhase(hpThreshold: 1.0, ability: _stormShroud, entryNarration: 'You face the Echo of the Tide.', passive: BeastPassive.none),
+      EchoPhase(hpThreshold: 0.66, ability: _stormShroud, entryNarration: 'The fog thickens around the Echo. You can barely see your own hands.', passive: BeastPassive.reducedAccuracy),
+      EchoPhase(hpThreshold: 0.33, ability: _stormShroud, entryNarration: 'The Drowned rise from the surf. The Echo summons its kin.', passive: BeastPassive.enrage),
+    ],
+  );
+
   static const List<Beast> all = [
     forestBoar,
     caveSpider,
@@ -206,6 +317,9 @@ class Beasts {
     tideHound,
     brineCrawler,
     saltTouchedDrowned,
+    echoOfWilds,
+    echoOfStone,
+    echoOfTide,
   ];
 
   static Beast? findById(String id) {

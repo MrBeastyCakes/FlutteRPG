@@ -317,9 +317,21 @@ class _DashboardViewState extends State<DashboardView> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      '${beast.icon} ${beast.name}',
-                      style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                    Row(
+                      children: [
+                        Text(
+                          beast.icon,
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: GameTheme.getBeastIconColor(beast.id),
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          beast.name,
+                          style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 4),
                     LinearProgressIndicator(

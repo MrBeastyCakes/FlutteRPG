@@ -481,7 +481,13 @@ class CodexView extends StatelessWidget {
           ),
           child: ListTile(
             contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            leading: Text(beast.icon, style: const TextStyle(fontSize: 32)),
+            leading: Text(
+              beast.icon,
+              style: TextStyle(
+                fontSize: 32,
+                color: GameTheme.getBeastIconColor(beast.id),
+              ),
+            ),
             title: Text(
               beast.name,
               style: const TextStyle(
@@ -565,7 +571,13 @@ class CodexView extends StatelessWidget {
           ),
           title: Row(
             children: [
-              Text(beast.icon, style: const TextStyle(fontSize: 28)),
+              Text(
+                beast.icon,
+                style: TextStyle(
+                  fontSize: 28,
+                  color: GameTheme.getBeastIconColor(beast.id),
+                ),
+              ),
               const SizedBox(width: 10),
               Text(
                 beast.name,

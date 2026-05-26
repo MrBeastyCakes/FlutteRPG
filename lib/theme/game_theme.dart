@@ -89,4 +89,11 @@ class GameTheme {
       ],
     );
   }
+
+  static Color? getBeastIconColor(String beastId) {
+    if (beastId == 'echo_of_wilds') return const Color(0xFF66BB6A); // Green
+    if (beastId == 'echo_of_stone') return const Color(0xFF90A4AE); // Grey
+    if (beastId == 'echo_of_tide') return const Color(0xFF29B6F6);  // Blue
+    return null;
+  }
 }

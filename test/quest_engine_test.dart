@@ -4,11 +4,12 @@ import 'package:flutter_text_based_rpg/models/milestone.dart';
 import 'package:flutter_text_based_rpg/models/zone.dart';
 import 'package:flutter_text_based_rpg/models/codex.dart';
 import 'package:flutter_text_based_rpg/models/weather.dart';
+import 'package:flutter_text_based_rpg/models/main_quests.dart';
 
 void main() {
   group('Milestones Configuration', () {
-    test('Milestones.all contains 12 entries (1 from Spec 1 + 10 from Spec 2 + 1 from Spec 3)', () {
-      expect(Milestones.all.length, 12);
+    test('Milestones.all contains 19 entries (1 from Spec 1 + 10 from Spec 2 + 1 from Spec 3 + 7 from Spec 5)', () {
+      expect(Milestones.all.length, 19);
     });
 
     test('first_codex_fragment milestone exists', () {
@@ -54,6 +55,33 @@ void main() {
       expect(engine.knownCodexFragmentIds.any(
         (id) => CodexFragments.findById(id)!.tag == CodexTag.tide,
       ), true);
+    });
+  });
+
+  group('Spec 5 Integration Tests', () {
+    test('Spec 5 acceptance — full Wilds Breach arc', () {
+      final engine = GameEngine();
+      engine.offerQuest(MainQuests.cleanseHollow());
+      engine.unlockZoneForTest('whispering_woods_3');
+      engine.travelTo(Zones.whisperingWoodsTier3);
+      expect(engine.firedMilestoneIdsForTest, contains('bloomwither_entered'));
+
+      engine.runCombatToVictoryForTest('echo_of_wilds');
+      expect(engine.inventory.hasItem('wilds_echo_essence', 1), true);
+
+      engine.travelTo(Zones.townSquare);
+      expect(engine.isActionVisible(Zones.townSquare.actions.firstWhere((a) => a.id == 'burn_wilds_echo_essence')), true);
+
+      engine.completeActionForTest('burn_wilds_echo_essence');
+      engine.completeMasterworkForTest('cleansing_wilds', useFirstSuccessOption: true);
+
+      expect(engine.engineFlags.contains('breach_wilds_cleansed'), true);
+      expect(engine.engineFlags.contains('first_breach_cleansed'), true);
+      expect(engine.inventory.hasItem('wilds_cleansing_token', 1), true);
+      expect(engine.inventory.hasItem('wilds_echo_essence', 1), false);
+      expect(engine.isActionVisible(Zones.townSquare.actions.firstWhere((a) => a.id == 'burn_wilds_echo_essence')), false);
+      expect(engine.completedQuests.any((q) => q.id == 'main_cleanse_hollow'), true);
+      expect(engine.isFragmentPoolOpenForTest(CodexTag.source), true);
     });
   });
 }
