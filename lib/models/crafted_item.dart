@@ -131,7 +131,7 @@ class Affixes {
     id: 'hearty',
     name: 'Hearty',
     description: '+25% heal',
-    appliesTo: {ItemType.food},
+    appliesTo: {ItemType.food, ItemType.brew},
     effect: AffixEffect(AffixEffectType.healPercent, 0.25),
   );
   
@@ -139,7 +139,7 @@ class Affixes {
     id: 'invigorating',
     name: 'Invigorating',
     description: '+25% energy',
-    appliesTo: {ItemType.food},
+    appliesTo: {ItemType.food, ItemType.brew},
     effect: AffixEffect(AffixEffectType.energyPercent, 0.25),
   );
   
@@ -147,7 +147,7 @@ class Affixes {
     id: 'valued',
     name: 'Valued',
     description: '+25% gold value',
-    appliesTo: {ItemType.weapon, ItemType.armor, ItemType.tool, ItemType.food},
+    appliesTo: {ItemType.weapon, ItemType.armor, ItemType.tool, ItemType.food, ItemType.brew},
     effect: AffixEffect(AffixEffectType.goldValuePercent, 0.25),
   );
   
@@ -163,7 +163,7 @@ class Affixes {
     id: 'plentiful',
     name: 'Plentiful',
     description: '+1 to a stack consumed at once',
-    appliesTo: {ItemType.food},
+    appliesTo: {ItemType.food, ItemType.brew},
     effect: AffixEffect(AffixEffectType.plentiful, 1.0),
   );
   
@@ -171,7 +171,7 @@ class Affixes {
     id: 'frugal',
     name: 'Frugal',
     description: '-10% energy cost when used/consumed',
-    appliesTo: {ItemType.weapon, ItemType.armor, ItemType.tool, ItemType.food},
+    appliesTo: {ItemType.weapon, ItemType.armor, ItemType.tool, ItemType.food, ItemType.brew},
     effect: AffixEffect(AffixEffectType.frugal, 0.10),
   );
 

@@ -186,6 +186,8 @@ class _ItemDashboardModalState extends State<ItemDashboardModal> {
     switch (item.type) {
       case ItemType.food:
         return 'Consumable Food';
+      case ItemType.brew:
+        return 'Elixir / Potion';
       case ItemType.tool:
         return 'Gathering Tool';
       case ItemType.weapon:
@@ -1111,7 +1113,8 @@ class _ItemDashboardModalState extends State<ItemDashboardModal> {
       );
     }
 
-    final price = listing.effectiveBuyPrice;
+    final rep = engine.getMerchantReputation(engine.shopState.currentMerchant.id);
+    final price = listing.getBuyPrice(rep.tier.discountPercent);
     final totalCost = price * _selectedQuantity;
     final gold = engine.playerStats.gold;
     final hasEnoughGold = gold >= totalCost;

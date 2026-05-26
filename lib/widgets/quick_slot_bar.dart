@@ -17,10 +17,14 @@ class QuickSlotBar extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: GameTheme.border, width: 1),
       ),
-      child: Row(
+      child: Wrap(
+        crossAxisAlignment: WrapCrossAlignment.center,
+        alignment: WrapAlignment.center,
+        spacing: 4,
+        runSpacing: 4,
         children: [
           const Text('Quick:', style: TextStyle(color: GameTheme.textMuted, fontSize: 11)),
-          const SizedBox(width: 8),
+          const SizedBox(width: 4),
           for (int i = 0; i < 3; i++) _buildSlot(context, engine, i),
         ],
       ),
@@ -115,7 +119,7 @@ class QuickSlotBar extends StatelessWidget {
 
   Widget _buildPickerSheet(BuildContext context, GameEngine engine, int index) {
     final foods = engine.inventory.slots
-        .where((slot) => slot.item.type == ItemType.food)
+        .where((slot) => slot.item.isFood)
         .toList();
     return ListView(
       shrinkWrap: true,

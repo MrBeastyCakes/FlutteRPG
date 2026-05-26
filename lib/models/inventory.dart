@@ -6,11 +6,15 @@ class InventoryKey {
   final String itemId;
   final QualityTier? quality;
   final List<String> affixIds; // sorted list
+  final int currentDurability;
+  final int maxDurability;
 
   const InventoryKey({
     required this.itemId,
     this.quality,
     required this.affixIds,
+    this.currentDurability = 0,
+    this.maxDurability = 0,
   });
 
   @override
@@ -20,13 +24,17 @@ class InventoryKey {
           runtimeType == other.runtimeType &&
           itemId == other.itemId &&
           quality == other.quality &&
-          _listEquals(affixIds, other.affixIds);
+          _listEquals(affixIds, other.affixIds) &&
+          currentDurability == other.currentDurability &&
+          maxDurability == other.maxDurability;
 
   @override
   int get hashCode =>
       itemId.hashCode ^
       (quality?.hashCode ?? 0) ^
-      affixIds.fold(0, (prev, element) => prev ^ element.hashCode);
+      affixIds.fold(0, (prev, element) => prev ^ element.hashCode) ^
+      currentDurability.hashCode ^
+      maxDurability.hashCode;
 
   static bool _listEquals(List<String> a, List<String> b) {
     if (a.length != b.length) return false;
@@ -42,12 +50,16 @@ class InventorySlot {
   final int quantity;
   final QualityTier? quality;
   final List<String> affixIds;
+  final int currentDurability;
+  final int maxDurability;
 
   const InventorySlot({
     required this.item,
     required this.quantity,
     this.quality,
     required this.affixIds,
+    this.currentDurability = 0,
+    this.maxDurability = 0,
   });
 
   InventorySlot copyWith({
@@ -55,12 +67,16 @@ class InventorySlot {
     int? quantity,
     QualityTier? quality,
     List<String>? affixIds,
+    int? currentDurability,
+    int? maxDurability,
   }) {
     return InventorySlot(
       item: item ?? this.item,
       quantity: quantity ?? this.quantity,
       quality: quality ?? this.quality,
       affixIds: affixIds ?? this.affixIds,
+      currentDurability: currentDurability ?? this.currentDurability,
+      maxDurability: maxDurability ?? this.maxDurability,
     );
   }
 }
@@ -96,6 +112,8 @@ class Inventory {
             quantity: qty,
             quality: key.quality,
             affixIds: key.affixIds,
+            currentDurability: key.currentDurability,
+            maxDurability: key.maxDurability,
           ));
         } else {
           for (int i = 0; i < qty; i++) {
@@ -104,6 +122,8 @@ class Inventory {
               quantity: 1,
               quality: key.quality,
               affixIds: key.affixIds,
+              currentDurability: key.currentDurability,
+              maxDurability: key.maxDurability,
             ));
           }
         }
@@ -154,15 +174,28 @@ class Inventory {
 
   int getItemCountPrecise(String itemId, QualityTier? quality, List<String> affixIds) {
     final sortedAffixes = List<String>.from(affixIds)..sort();
-    final key = InventoryKey(itemId: itemId, quality: quality, affixIds: sortedAffixes);
-    return items[key] ?? 0;
+    int count = 0;
+    items.forEach((key, qty) {
+      if (key.itemId == itemId &&
+          key.quality == quality &&
+          InventoryKey._listEquals(key.affixIds, sortedAffixes)) {
+        count += qty;
+      }
+    });
+    return count;
   }
 
-  Inventory addItem(Item item, int quantity, [QualityTier? quality, List<String>? affixIds]) {
+  Inventory addItem(Item item, int quantity, [QualityTier? quality, List<String>? affixIds, int currentDurability = 0, int maxDurability = 0]) {
     if (quantity <= 0) return this;
 
     final sortedAffixes = affixIds != null ? (List<String>.from(affixIds)..sort()) : <String>[];
-    final key = InventoryKey(itemId: item.id, quality: quality, affixIds: sortedAffixes);
+    final key = InventoryKey(
+      itemId: item.id,
+      quality: quality,
+      affixIds: sortedAffixes,
+      currentDurability: currentDurability,
+      maxDurability: maxDurability,
+    );
     final newItems = Map<InventoryKey, int>.from(items);
 
     bool isStackable = item.type != ItemType.tool && item.type != ItemType.weapon && item.type != ItemType.armor;
@@ -190,8 +223,14 @@ class Inventory {
 
     if (quality != null || affixIds != null) {
       final sortedAffixes = affixIds != null ? (List<String>.from(affixIds)..sort()) : <String>[];
-      final key = InventoryKey(itemId: itemId, quality: quality, affixIds: sortedAffixes);
-      if (newItems.containsKey(key)) {
+      final matchingKeys = newItems.keys.where((k) =>
+        k.itemId == itemId &&
+        k.quality == quality &&
+        InventoryKey._listEquals(k.affixIds, sortedAffixes)
+      ).toList();
+
+      for (var key in matchingKeys) {
+        if (remainingToRemove <= 0) break;
         int currentQty = newItems[key]!;
         if (currentQty > remainingToRemove) {
           newItems[key] = currentQty - remainingToRemove;

@@ -21,6 +21,11 @@ import '../models/main_quests.dart';
 import '../models/weather.dart';
 import '../models/combat.dart';
 import '../models/random_event.dart';
+import '../models/reagent_spawn.dart';
+import '../models/daily_task.dart';
+import '../models/title.dart';
+import '../models/player_progression.dart';
+import 'achievement_engine.dart';
 import 'activity_log.dart';
 
 class ActiveActionState {
@@ -255,6 +260,7 @@ class GameEngine extends ChangeNotifier {
 
   final List<Quest> _activeQuests = [];
   final List<Quest> _completedQuests = [];
+  final List<ReagentSpawn> _reagentSpawns = [];
   final Set<String> _knownCodexFragmentIds = {};
   final Map<String, BestiaryEntry> _bestiary = {};
   final Map<String, RegionStatusInfo> _regionStatus = {};
@@ -307,6 +313,17 @@ class GameEngine extends ChangeNotifier {
   final List<String?> _quickslots = [null, null, null];
   final Map<SkillType, String> _skillSpecs = {};
   final Map<SkillType, String> _skillSubSpecs = {};
+  final Map<String, MerchantReputation> _merchantRep = {};
+  final Set<String> _claimedGifts = {};
+  List<DailyTask> _todaysTasks = [];
+  bool _dailyBonusClaimed = false;
+  bool _tavernRequested = false;
+  int _lifetimeGold = 10; // start with initial gold
+  bool _anyRepairThisRun = false;
+  final Set<String> _firstEnteredZones = {'town_square'};
+  int _totalCrafts = 0;
+  int _masterworkCrafts = 0;
+  int _brewCrafts = 0;
   ActiveRandomEventState? _activeRandomEvent;
   final StreamController<RandomEvent> _randomEventStream = StreamController<RandomEvent>.broadcast();
 
@@ -417,13 +434,27 @@ class GameEngine extends ChangeNotifier {
 
   Item? get equippedWeapon => _equippedWeaponSlot?.item;
   Item? get equippedArmor => _equippedArmorSlot?.item;
-  InventorySlot? get equippedWeaponSlot => _equippedWeaponSlot;
-  InventorySlot? get equippedArmorSlot => _equippedArmorSlot;
+  InventorySlot? get equippedWeaponSlot {
+    if (_equippedWeaponSlot == null) return null;
+    final stamped = ensureDurabilityStamped(_equippedWeaponSlot!);
+    if (stamped != _equippedWeaponSlot) {
+      _equippedWeaponSlot = stamped;
+    }
+    return _equippedWeaponSlot;
+  }
+  InventorySlot? get equippedArmorSlot {
+    if (_equippedArmorSlot == null) return null;
+    final stamped = ensureDurabilityStamped(_equippedArmorSlot!);
+    if (stamped != _equippedArmorSlot) {
+      _equippedArmorSlot = stamped;
+    }
+    return _equippedArmorSlot;
+  }
   CombatState? get activeCombat => _activeCombat;
 
   int getPlayerAttack() {
     int base = 5;
-    if (_equippedWeaponSlot != null) {
+    if (_equippedWeaponSlot != null && !isSlotWorn(_equippedWeaponSlot)) {
       base += getItemAttackPower(_equippedWeaponSlot!.item, _equippedWeaponSlot!.quality, _equippedWeaponSlot!.affixIds).round();
     }
     // Combat Perk 10 (Slayer's Might): +3 Attack power
@@ -436,7 +467,7 @@ class GameEngine extends ChangeNotifier {
 
   int getPlayerDefense() {
     int base = 0;
-    if (_equippedArmorSlot != null) {
+    if (_equippedArmorSlot != null && !isSlotWorn(_equippedArmorSlot)) {
       base += getItemDefense(_equippedArmorSlot!.item, _equippedArmorSlot!.quality, _equippedArmorSlot!.affixIds).round();
     }
     // Combat Perk 10 (Slayer's Might): +1 Defense
@@ -461,24 +492,53 @@ class GameEngine extends ChangeNotifier {
 
   void equipWeapon(Item item, [QualityTier? quality, List<String>? affixIds]) {
     if (item.type != ItemType.weapon) return;
-    final affs = affixIds ?? const [];
     if (!_inventory.hasItem(item.id, 1)) return;
 
-    // Remove from inventory
-    _inventory = _inventory.removeItem(item.id, 1, quality, affs);
+    InventoryKey? targetKey;
+    final sortedAffs = affixIds != null ? (List<String>.from(affixIds)..sort()) : null;
+    for (var key in _inventory.items.keys) {
+      if (key.itemId == item.id) {
+        if (quality != null && key.quality != quality) continue;
+        if (sortedAffs != null && !listEquals(key.affixIds, sortedAffs)) continue;
+        targetKey = key;
+        break;
+      }
+    }
+
+    if (targetKey == null) {
+      log("Could not find matching ${item.name} in inventory.", LogType.error);
+      return;
+    }
+
+    // Remove from inventory using the specific quality/affixes we found
+    _inventory = _inventory.removeItem(item.id, 1, targetKey.quality, targetKey.affixIds);
 
     // Unequip current weapon if any
     if (_equippedWeaponSlot != null) {
       if (_inventory.isFull) {
         log("Inventory is full! Cannot unequip current weapon.", LogType.error);
-        _inventory = _inventory.addItem(item, 1, quality, affs);
+        _inventory = _inventory.addItem(item, 1, targetKey.quality, targetKey.affixIds, targetKey.currentDurability, targetKey.maxDurability);
         return;
       }
-      _inventory = _inventory.addItem(_equippedWeaponSlot!.item, 1, _equippedWeaponSlot!.quality, _equippedWeaponSlot!.affixIds);
+      _inventory = _inventory.addItem(_equippedWeaponSlot!.item, 1, _equippedWeaponSlot!.quality, _equippedWeaponSlot!.affixIds, _equippedWeaponSlot!.currentDurability, _equippedWeaponSlot!.maxDurability);
     }
 
-    _equippedWeaponSlot = InventorySlot(item: item, quantity: 1, quality: quality, affixIds: affs);
-    log("Equipped ⚔️ ${item.name} (Attack +${getItemAttackPower(item, quality, affs).toInt()}).", LogType.success);
+    int curDur = targetKey.currentDurability;
+    int maxDur = targetKey.maxDurability;
+    if (maxDur == 0 && item.value > 0) {
+      maxDur = calculateMaxDurability(item, targetKey.quality, targetKey.affixIds);
+      curDur = maxDur;
+    }
+
+    _equippedWeaponSlot = InventorySlot(
+      item: item,
+      quantity: 1,
+      quality: targetKey.quality,
+      affixIds: targetKey.affixIds,
+      currentDurability: curDur,
+      maxDurability: maxDur,
+    );
+    log("Equipped ⚔️ ${item.name} (Attack +${getItemAttackPower(item, targetKey.quality, targetKey.affixIds).toInt()}).", LogType.success);
     notifyListeners();
   }
 
@@ -491,31 +551,60 @@ class GameEngine extends ChangeNotifier {
 
     final slot = _equippedWeaponSlot!;
     _equippedWeaponSlot = null;
-    _inventory = _inventory.addItem(slot.item, 1, slot.quality, slot.affixIds);
+    _inventory = _inventory.addItem(slot.item, 1, slot.quality, slot.affixIds, slot.currentDurability, slot.maxDurability);
     log("Unequipped ⚔️ ${slot.item.name}.", LogType.info);
     notifyListeners();
   }
 
   void equipArmor(Item item, [QualityTier? quality, List<String>? affixIds]) {
     if (item.type != ItemType.armor) return;
-    final affs = affixIds ?? const [];
     if (!_inventory.hasItem(item.id, 1)) return;
 
+    InventoryKey? targetKey;
+    final sortedAffs = affixIds != null ? (List<String>.from(affixIds)..sort()) : null;
+    for (var key in _inventory.items.keys) {
+      if (key.itemId == item.id) {
+        if (quality != null && key.quality != quality) continue;
+        if (sortedAffs != null && !listEquals(key.affixIds, sortedAffs)) continue;
+        targetKey = key;
+        break;
+      }
+    }
+
+    if (targetKey == null) {
+      log("Could not find matching ${item.name} in inventory.", LogType.error);
+      return;
+    }
+
     // Remove from inventory
-    _inventory = _inventory.removeItem(item.id, 1, quality, affs);
+    _inventory = _inventory.removeItem(item.id, 1, targetKey.quality, targetKey.affixIds);
 
     // Unequip current armor if any
     if (_equippedArmorSlot != null) {
       if (_inventory.isFull) {
         log("Inventory is full! Cannot unequip current armor.", LogType.error);
-        _inventory = _inventory.addItem(item, 1, quality, affs);
+        _inventory = _inventory.addItem(item, 1, targetKey.quality, targetKey.affixIds, targetKey.currentDurability, targetKey.maxDurability);
         return;
       }
-      _inventory = _inventory.addItem(_equippedArmorSlot!.item, 1, _equippedArmorSlot!.quality, _equippedArmorSlot!.affixIds);
+      _inventory = _inventory.addItem(_equippedArmorSlot!.item, 1, _equippedArmorSlot!.quality, _equippedArmorSlot!.affixIds, _equippedArmorSlot!.currentDurability, _equippedArmorSlot!.maxDurability);
     }
 
-    _equippedArmorSlot = InventorySlot(item: item, quantity: 1, quality: quality, affixIds: affs);
-    log("Equipped 🛡️ ${item.name} (Defense +${getItemDefense(item, quality, affs).toInt()}).", LogType.success);
+    int curDur = targetKey.currentDurability;
+    int maxDur = targetKey.maxDurability;
+    if (maxDur == 0 && item.value > 0) {
+      maxDur = calculateMaxDurability(item, targetKey.quality, targetKey.affixIds);
+      curDur = maxDur;
+    }
+
+    _equippedArmorSlot = InventorySlot(
+      item: item,
+      quantity: 1,
+      quality: targetKey.quality,
+      affixIds: targetKey.affixIds,
+      currentDurability: curDur,
+      maxDurability: maxDur,
+    );
+    log("Equipped 🛡️ ${item.name} (Defense +${getItemDefense(item, targetKey.quality, targetKey.affixIds).toInt()}).", LogType.success);
     notifyListeners();
   }
 
@@ -528,7 +617,7 @@ class GameEngine extends ChangeNotifier {
 
     final slot = _equippedArmorSlot!;
     _equippedArmorSlot = null;
-    _inventory = _inventory.addItem(slot.item, 1, slot.quality, slot.affixIds);
+    _inventory = _inventory.addItem(slot.item, 1, slot.quality, slot.affixIds, slot.currentDurability, slot.maxDurability);
     log("Unequipped 🛡️ ${slot.item.name}.", LogType.info);
     notifyListeners();
   }
@@ -571,7 +660,15 @@ class GameEngine extends ChangeNotifier {
 
   int get maxEquipmentSlots => _maxEquipmentSlots;
   Map<SkillType, Item> get equippedTools => _equippedToolSlots.map((k, v) => MapEntry(k, v.item));
-  Map<SkillType, InventorySlot> get equippedToolSlots => _equippedToolSlots;
+  Map<SkillType, InventorySlot> get equippedToolSlots {
+    _equippedToolSlots.forEach((skill, slot) {
+      final stamped = ensureDurabilityStamped(slot);
+      if (stamped != slot) {
+        _equippedToolSlots[skill] = stamped;
+      }
+    });
+    return _equippedToolSlots;
+  }
 
   void equipTool(Item item, [QualityTier? quality, List<String>? affixIds]) {
     if (!item.isTool || item.toolSkill == null) {
@@ -580,7 +677,6 @@ class GameEngine extends ChangeNotifier {
     }
 
     final skill = item.toolSkill!;
-    final affs = affixIds ?? const [];
 
     // Verify if we have the item in inventory
     if (!_inventory.hasItem(item.id, 1)) {
@@ -594,21 +690,51 @@ class GameEngine extends ChangeNotifier {
       return;
     }
 
+    InventoryKey? targetKey;
+    final sortedAffs = affixIds != null ? (List<String>.from(affixIds)..sort()) : null;
+    for (var key in _inventory.items.keys) {
+      if (key.itemId == item.id) {
+        if (quality != null && key.quality != quality) continue;
+        if (sortedAffs != null && !listEquals(key.affixIds, sortedAffs)) continue;
+        targetKey = key;
+        break;
+      }
+    }
+
+    if (targetKey == null) {
+      log("Could not find matching ${item.name} in inventory.", LogType.error);
+      return;
+    }
+
     cancelAction();
 
     // Remove tool from inventory
-    _inventory = _inventory.removeItem(item.id, 1, quality, affs);
+    _inventory = _inventory.removeItem(item.id, 1, targetKey.quality, targetKey.affixIds);
 
     // Save previous tool if any
     final oldToolSlot = _equippedToolSlots[skill];
 
+    int curDur = targetKey.currentDurability;
+    int maxDur = targetKey.maxDurability;
+    if (maxDur == 0 && item.value > 0) {
+      maxDur = calculateMaxDurability(item, targetKey.quality, targetKey.affixIds);
+      curDur = maxDur;
+    }
+
     // Equip new tool
-    _equippedToolSlots[skill] = InventorySlot(item: item, quantity: 1, quality: quality, affixIds: affs);
+    _equippedToolSlots[skill] = InventorySlot(
+      item: item,
+      quantity: 1,
+      quality: targetKey.quality,
+      affixIds: targetKey.affixIds,
+      currentDurability: curDur,
+      maxDurability: maxDur,
+    );
     log("Equipped ${item.icon} ${item.name} for ${skill.name}.", LogType.success);
 
     // Return previous tool to inventory
     if (oldToolSlot != null) {
-      _inventory = _inventory.addItem(oldToolSlot.item, 1, oldToolSlot.quality, oldToolSlot.affixIds);
+      _inventory = _inventory.addItem(oldToolSlot.item, 1, oldToolSlot.quality, oldToolSlot.affixIds, oldToolSlot.currentDurability, oldToolSlot.maxDurability);
       log("Returned ${oldToolSlot.item.icon} ${oldToolSlot.item.name} to inventory.", LogType.info);
     }
 
@@ -630,7 +756,7 @@ class GameEngine extends ChangeNotifier {
     cancelAction();
 
     _equippedToolSlots.remove(skill);
-    _inventory = _inventory.addItem(toolSlot.item, 1, toolSlot.quality, toolSlot.affixIds);
+    _inventory = _inventory.addItem(toolSlot.item, 1, toolSlot.quality, toolSlot.affixIds, toolSlot.currentDurability, toolSlot.maxDurability);
     log("Unequipped ${toolSlot.item.icon} ${toolSlot.item.name} for ${skill.name}.", LogType.success);
 
     notifyListeners();
@@ -645,6 +771,7 @@ class GameEngine extends ChangeNotifier {
 
   List<Quest> get activeQuests => List.unmodifiable(_activeQuests);
   List<Quest> get completedQuests => List.unmodifiable(_completedQuests);
+  List<ReagentSpawn> get reagentSpawns => List.unmodifiable(_reagentSpawns);
   Set<String> get knownCodexFragmentIds => Set.unmodifiable(_knownCodexFragmentIds);
   Map<String, BestiaryEntry> get bestiary => Map.unmodifiable(_bestiary);
   Map<String, RegionStatusInfo> get regionStatus => Map.unmodifiable(_regionStatus);
@@ -652,6 +779,21 @@ class GameEngine extends ChangeNotifier {
   Set<String> get firedMilestoneIds => Set.unmodifiable(_firedMilestoneIds);
   Set<String> get engineFlags => Set.unmodifiable(_engineFlags);
   String? get activeTitleId => _activeTitleId;
+  List<DailyTask> get todaysTasks => _todaysTasks;
+  bool get dailyBonusClaimed => _dailyBonusClaimed;
+  Map<String, MerchantReputation> get merchantRep => Map.unmodifiable(_merchantRep);
+  bool get tavernRequested => _tavernRequested;
+  set tavernRequested(bool val) {
+    _tavernRequested = val;
+    notifyListeners();
+  }
+  int get lifetimeGold => _lifetimeGold;
+  bool get anyRepairThisRun => _anyRepairThisRun;
+  int get totalCrafts => _totalCrafts;
+  int get masterworkCrafts => _masterworkCrafts;
+  int get brewCrafts => _brewCrafts;
+  int get knownRecipesCount => _knownRecipeIds.length;
+
   bool get isPaused => _isPaused;
 
   Set<String> get readCodexFragmentIds => Set.unmodifiable(_readCodexFragmentIds);
@@ -767,6 +909,7 @@ class GameEngine extends ChangeNotifier {
     cancelMasterwork();
 
     _currentZone = zone;
+    _generateSessionSpawns(); // Ensure spawns are generated on travel
     log("Traveled to ${zone.name}.", LogType.info);
 
     _notifyQuestObservers(ZoneVisitedEvent(zone.id));
@@ -808,7 +951,7 @@ class GameEngine extends ChangeNotifier {
     if (skill.levelCap > 20) bonus += 0.30; // Lvl 20 Perk (+30% speed)
 
     final toolSlot = _equippedToolSlots[type];
-    if (toolSlot != null) {
+    if (toolSlot != null && !isSlotWorn(toolSlot)) {
       bonus += getItemSpeedBonus(toolSlot.item, toolSlot.quality, toolSlot.affixIds);
     }
 
@@ -827,7 +970,7 @@ class GameEngine extends ChangeNotifier {
     double bonus = (skill.level - 1) * 0.01; // +1% per level above 1
     
     final toolSlot = _equippedToolSlots[type];
-    if (toolSlot != null) {
+    if (toolSlot != null && !isSlotWorn(toolSlot)) {
       bonus += getItemSuccessBonus(toolSlot.item, toolSlot.quality, toolSlot.affixIds);
     }
 
@@ -897,6 +1040,14 @@ class GameEngine extends ChangeNotifier {
 
   // Timer Tick Action
   void startAction(ZoneAction action) {
+    if (action.id == 'visit_tavern') {
+      _tavernRequested = true;
+      _generateTodaysTasks();
+      _notifyQuestObservers(ZoneVisitedEvent('tavern'));
+      notifyListeners();
+      return;
+    }
+
     // Cooldown check for Wildflower Garden
     if (action.id == 'wildflower_garden') {
       if (_lastGardenTime != null) {
@@ -1495,17 +1646,9 @@ class GameEngine extends ChangeNotifier {
       _playerStats = _playerStats.copyWith(currentEnergy: newEnergy);
 
       // 2. Award Combat XP
-      final oldSkill = _skills[SkillType.combat]!;
       final xpReward = action.xpReward * getXpMultiplier();
-      final newSkill = oldSkill.addXp(xpReward);
-      _skills[SkillType.combat] = newSkill;
-
-      if (newSkill.level > oldSkill.level) {
-        log("Level Up! Your Combat is now Level ${newSkill.level}!", LogType.levelUp);
-        _levelUpController.add(LevelUpEvent(SkillType.combat, newSkill.level));
-      } else if (newSkill.isGated && !oldSkill.isGated) {
-        log("Limit Reached! Level ${newSkill.levelCap} Masterwork Trial is now unlocked. Check the Skills tab.", LogType.warning);
-      }
+      final oldSkill = _skills[SkillType.combat]!;
+      _grantSkillXp(SkillType.combat, xpReward);
       _maybeOfferMasterworkQuest(SkillType.combat);
 
       // 3. Award Monster drops
@@ -1543,7 +1686,11 @@ class GameEngine extends ChangeNotifier {
         rollBlueprintScrollDrop(_currentZone.tier);
 
         recordBestiary(beast.id, drops);
+        if (_equippedWeaponSlot == null) {
+          _engineFlags.add('ach_barehanded_kill');
+        }
         _notifyQuestObservers(BeastDefeatedEvent(beast.id));
+        _updateDailyTaskProgress(BeastDefeatedEvent(beast.id));
         final regionTag = _regionTagForBeast(beast.id);
         if (regionTag != null) {
           tryDropFragment(regionTag, 0.08);
@@ -1580,17 +1727,8 @@ class GameEngine extends ChangeNotifier {
       _playerStats = _playerStats.copyWith(currentEnergy: newEnergy);
 
       // Award XP
-      final oldSkill = _skills[structure.requiredSkill]!;
       final xpReward = structure.xpReward * getXpMultiplier();
-      final newSkill = oldSkill.addXp(xpReward);
-      _skills[structure.requiredSkill] = newSkill;
-
-      if (newSkill.level > oldSkill.level) {
-        log("Level Up! Your ${structure.requiredSkill.name} is now Level ${newSkill.level}!", LogType.levelUp);
-        _levelUpController.add(LevelUpEvent(structure.requiredSkill, newSkill.level));
-      } else if (newSkill.isGated && !oldSkill.isGated) {
-        log("Limit Reached! Level ${newSkill.levelCap} Masterwork Trial is now unlocked. Check the Skills tab.", LogType.warning);
-      }
+      _grantSkillXp(structure.requiredSkill, xpReward);
       _maybeOfferMasterworkQuest(structure.requiredSkill);
 
       // Add to structures list for that zone (create/add StationInstance)
@@ -1723,18 +1861,18 @@ class GameEngine extends ChangeNotifier {
 
     // Award XP
     if (action.requiredSkill != null) {
-      final oldSkill = _skills[action.requiredSkill!]!;
       final xpReward = action.xpReward * getXpMultiplier();
-      final newSkill = oldSkill.addXp(xpReward);
-      _skills[action.requiredSkill!] = newSkill;
-
-      if (newSkill.level > oldSkill.level) {
-        log("Level Up! Your ${action.requiredSkill!.name} is now Level ${newSkill.level}!", LogType.levelUp);
-        _levelUpController.add(LevelUpEvent(action.requiredSkill!, newSkill.level));
-      } else if (newSkill.isGated && !oldSkill.isGated) {
-        log("Limit Reached! Level ${newSkill.levelCap} Masterwork Trial is now unlocked. Check the Skills tab.", LogType.warning);
-      }
+      _grantSkillXp(action.requiredSkill!, xpReward);
       _maybeOfferMasterworkQuest(action.requiredSkill!);
+      
+      if (action.requiredSkill == SkillType.woodcutting ||
+          action.requiredSkill == SkillType.mining ||
+          action.requiredSkill == SkillType.herbalism) {
+        if (!_engineFlags.contains('ach_first_gather')) {
+          _engineFlags.add('ach_first_gather');
+          _checkAndUnlockAchievements();
+        }
+      }
     }
 
     // Roll Loot table
@@ -2122,8 +2260,14 @@ class GameEngine extends ChangeNotifier {
 
     // Fragment drops by action id
     if (action.id == 'inspect_obelisk') {
+      final startCount = _knownCodexFragmentIds.length;
       tryDropFragment(CodexTag.wilds, 0.10);
       tryDropFragment(CodexTag.oldEmpire, 0.01);
+      final endCount = _knownCodexFragmentIds.length;
+      if (endCount - startCount >= 2) {
+        _engineFlags.add('ach_obelisk_double_drop');
+        _checkAndUnlockAchievements();
+      }
     }
     if (action.id == 'inspect_glyph') {
       tryDropFragment(CodexTag.stone, 0.10);
@@ -2164,6 +2308,12 @@ class GameEngine extends ChangeNotifier {
     }
 
     rollBlueprintScrollDrop(_currentZone.tier);
+    if (!action.isCombat && action.requiredSkill != null) {
+      final tool = _equippedToolSlots[action.requiredSkill!];
+      if (tool != null) {
+        _decrementDurability(tool, slot: 'tool', skill: action.requiredSkill);
+      }
+    }
     _playerAction = null;
     notifyListeners();
 
@@ -2214,21 +2364,13 @@ class GameEngine extends ChangeNotifier {
     final modifierItemId = queued.modifierItemId;
 
     // Award XP
-    final oldSkill = _skills[recipe.requiredSkill]!;
     double xpMultiplier = getXpMultiplier();
     if (modifierItemId == 'wildflower') {
       xpMultiplier *= 1.5;
     }
     final xpReward = recipe.xpReward * xpMultiplier;
-    final newSkill = oldSkill.addXp(xpReward);
-    _skills[recipe.requiredSkill] = newSkill;
-
-    if (newSkill.level > oldSkill.level) {
-      log("Level Up! Your ${recipe.requiredSkill.name} is now Level ${newSkill.level}!", LogType.levelUp);
-      _levelUpController.add(LevelUpEvent(recipe.requiredSkill, newSkill.level));
-    } else if (newSkill.isGated && !oldSkill.isGated) {
-      log("Limit Reached! Level ${newSkill.levelCap} Masterwork Trial is now unlocked. Check the Skills tab.", LogType.warning);
-    }
+    final oldSkill = _skills[recipe.requiredSkill]!;
+    _grantSkillXp(recipe.requiredSkill, xpReward);
     _maybeOfferMasterworkQuest(recipe.requiredSkill);
 
     // Check refund modifiers / perks
@@ -2279,6 +2421,9 @@ class GameEngine extends ChangeNotifier {
         if (_skillSubSpecs[SkillType.mining] == 'mining_smelt_master') {
           finalQty *= 2;
         }
+      }
+      if (modifierItemId == 'spirit_sap') {
+        finalQty *= 2;
       }
 
       final skillLevel = oldSkill.level;
@@ -2333,11 +2478,28 @@ class GameEngine extends ChangeNotifier {
         if (quality == QualityTier.crude || quality == QualityTier.standard) {
           quality = QualityTier.fine;
         }
+      } else if (modifierItemId == 'wisp_light') {
+        quality = QualityTier.masterwork;
       }
 
       var affixes = rollAffixes(quality, resultItem.type);
-      if (modifierItemId == 'nightshade' && affixes.isEmpty) {
+      if ((modifierItemId == 'nightshade' || modifierItemId == 'moonpetal') && affixes.isEmpty) {
         affixes = rollAffixesForced(resultItem.type);
+      }
+      if (modifierItemId == 'hollow_bone' && resultItem.type == ItemType.weapon) {
+        if (!affixes.contains('brutal')) {
+          affixes = List<String>.from(affixes)..add('brutal');
+        }
+      }
+      if (modifierItemId == 'sea_tear' && resultItem.type == ItemType.armor) {
+        if (!affixes.contains('tempered')) {
+          affixes = List<String>.from(affixes)..add('tempered');
+        }
+      }
+      if (modifierItemId == 'coalblood') {
+        if (!affixes.contains('frugal')) {
+          affixes = List<String>.from(affixes)..add('frugal');
+        }
       }
       if (_skillSubSpecs[SkillType.cooking] == 'cooking_brewmaster' &&
           recipe.requiredSkill == SkillType.cooking &&
@@ -2349,14 +2511,25 @@ class GameEngine extends ChangeNotifier {
       if (_inventory.isFull) {
         log("Your inventory is full! The ${resultItem.name} was dropped.", LogType.error);
       } else {
-        _inventory = _inventory.addItem(resultItem, finalQty, quality, affixes);
+        final maxDur = calculateMaxDurability(resultItem, quality, affixes);
+        _inventory = _inventory.addItem(resultItem, finalQty, quality, affixes, maxDur, maxDur);
         
+        _totalCrafts += finalQty;
+        if (quality == QualityTier.masterwork) {
+          _masterworkCrafts += finalQty;
+        }
+        if (resultItem.type == ItemType.brew) {
+          _brewCrafts += finalQty;
+        }
+
         String affixSuffix = affixes.isNotEmpty ? " [${affixes.map((a) => Affixes.findById(a)?.name ?? a).join(', ')}]" : "";
         String qualLabel = quality == QualityTier.standard ? "" : "${quality.name.toUpperCase()} ";
 
         log("Crafted: ${resultItem.icon} ${qualLabel}${resultItem.name}$affixSuffix x$finalQty at ${instance.stationId}", LogType.success);
         _lootController.add(LootEvent(resultItem.icon, "${qualLabel}${resultItem.name}$affixSuffix", quality, affixes));
         _notifyQuestObservers(ItemCraftedEvent(recipe.id, quality, finalQty));
+        _updateDailyTaskProgress(ItemCraftedEvent(recipe.id, quality, finalQty));
+        _checkAndUnlockAchievements();
       }
     }
 
@@ -2625,14 +2798,17 @@ class GameEngine extends ChangeNotifier {
       return;
     }
 
-    _inventory = _inventory.addItem(item, 1);
+    final maxDur = calculateMaxDurability(item, QualityTier.standard, const []);
+    _inventory = _inventory.addItem(item, 1, QualityTier.standard, const [], maxDur, maxDur);
     _playerStats = _playerStats.copyWith(gold: _playerStats.gold - item.value);
     log("Purchased ${item.icon} ${item.name} for ${item.value} Gold.", LogType.success);
     notifyListeners();
   }
 
   void buyShopItem(ShopListing listing, int quantity) {
-    final cost = listing.effectiveBuyPrice * quantity;
+    final rep = getMerchantReputation(_shopState.currentMerchant.id);
+    final finalBuyPrice = listing.getBuyPrice(rep.tier.discountPercent);
+    final cost = finalBuyPrice * quantity;
     if (_playerStats.gold < cost) {
       log("Not enough gold to buy ${listing.item.name} x$quantity!", LogType.error);
       _shopController.add(ShopEvent(type: 'error', item: listing.item, quantity: quantity, goldAmount: 0));
@@ -2664,7 +2840,8 @@ class GameEngine extends ChangeNotifier {
       }
     }
 
-    _inventory = _inventory.addItem(listing.item, quantity);
+    final maxDur = calculateMaxDurability(listing.item, QualityTier.standard, const []);
+    _inventory = _inventory.addItem(listing.item, quantity, QualityTier.standard, const [], maxDur, maxDur);
     _playerStats = _playerStats.copyWith(gold: _playerStats.gold - cost);
 
     if (listing.stock != null) {
@@ -2684,6 +2861,13 @@ class GameEngine extends ChangeNotifier {
 
     log("Purchased ${listing.item.icon} ${listing.item.name} x$quantity for $cost Gold.", LogType.success);
     _shopController.add(ShopEvent(type: 'purchase', item: listing.item, quantity: quantity, goldAmount: cost));
+    
+    addMerchantReputation(_shopState.currentMerchant.id, cost * 2);
+    if (!_engineFlags.contains('ach_first_trade')) {
+      _engineFlags.add('ach_first_trade');
+      _checkAndUnlockAchievements();
+    }
+
     notifyListeners();
   }
 
@@ -2721,6 +2905,14 @@ class GameEngine extends ChangeNotifier {
     String qualLabel = quality != null ? "[${quality.name.toUpperCase()}] " : "";
     log("Sold ${item.icon} $qualLabel${item.name} x$quantity for $earnings Gold.", LogType.success);
     _shopController.add(ShopEvent(type: 'sale', item: item, quantity: quantity, goldAmount: earnings));
+    
+    _lifetimeGold += earnings;
+    addMerchantReputation(_shopState.currentMerchant.id, earnings * 1);
+    if (!_engineFlags.contains('ach_first_trade')) {
+      _engineFlags.add('ach_first_trade');
+      _checkAndUnlockAchievements();
+    }
+
     notifyListeners();
   }
 
@@ -2743,9 +2935,21 @@ class GameEngine extends ChangeNotifier {
         activeMerchantIndex: 0,
       ).withRefreshedDeals(_random);
 
+      // Reset session reputation for all merchants on rotation/restock
+      for (final id in _merchantRep.keys) {
+        _merchantRep[id] = _merchantRep[id]!.copyWith(sessionReputation: 0);
+      }
+
       log("🏪 The market square merchants have rotated! Check out their new stock.", LogType.info);
       notifyListeners();
     }
+  }
+
+  void forceRestockForTesting() {
+    _shopState = _shopState.copyWith(
+      lastRestockTime: DateTime.now().subtract(const Duration(minutes: 10)),
+    );
+    checkShopRestock();
   }
 
   // Masterwork Scenario Methods
@@ -2828,6 +3032,9 @@ class GameEngine extends ChangeNotifier {
       _activeMasterwork = null;
 
       if (option.isSuccess) {
+        if (!_engineFlags.contains('ach_first_masterwork')) {
+          _engineFlags.add('ach_first_masterwork');
+        }
         if (taskId.startsWith('cleansing_')) {
           _onCleansingComplete(taskId.substring('cleansing_'.length));
         } else {
@@ -3202,6 +3409,7 @@ class GameEngine extends ChangeNotifier {
     _currentZone = Zones.townSquare;
     _unlockedZoneIds.clear();
     _unlockedZoneIds.add('town_square');
+    _reagentSpawns.clear();
     _initializeRuinedStations();
     _knownRecipeIds.clear();
     _logs.clear();
@@ -3226,6 +3434,21 @@ class GameEngine extends ChangeNotifier {
     _lastGardenTime = null;
     _lastGroveTime = null;
 
+    _merchantRep.clear();
+    _claimedGifts.clear();
+    _todaysTasks = [];
+    _dailyBonusClaimed = false;
+    _tavernRequested = false;
+    _lifetimeGold = 10;
+    _anyRepairThisRun = false;
+    _firstEnteredZones.clear();
+    _firstEnteredZones.add('town_square');
+    _totalCrafts = 0;
+    _masterworkCrafts = 0;
+    _brewCrafts = 0;
+    _earnedAchievementIds.clear();
+    _activeTitleId = null;
+
     // Re-initialize skills
     for (var type in SkillType.values) {
       _skills[type] = SkillState.initial(type);
@@ -3240,6 +3463,7 @@ class GameEngine extends ChangeNotifier {
   // --- Quest & Codex Engine Integration ---
 
   void _notifyQuestObservers(QuestEvent event) {
+    _updateDailyTaskProgress(event);
     for (final quest in List<Quest>.from(_activeQuests)) {
       if (quest.status != QuestStatus.active) continue;
       for (final objective in quest.objectives) {
@@ -3320,14 +3544,9 @@ class GameEngine extends ChangeNotifier {
       case RewardKind.skillXp:
         if (reward.targetId != null) {
           final skillType = SkillType.values.firstWhere((s) => s.name.toLowerCase() == reward.targetId?.toLowerCase());
-          final oldSkill = _skills[skillType]!;
-          final newSkill = oldSkill.addXp(reward.amount.toDouble() * getXpMultiplier());
-          _skills[skillType] = newSkill;
+          final xpReward = reward.amount.toDouble() * getXpMultiplier();
           log("Received: +${reward.amount} ${skillType.name} XP", LogType.success);
-          if (newSkill.level > oldSkill.level) {
-            log("Level Up! Your ${skillType.name} is now Level ${newSkill.level}!", LogType.levelUp);
-            _levelUpController.add(LevelUpEvent(skillType, newSkill.level));
-          }
+          _grantSkillXp(skillType, xpReward);
           _maybeOfferMasterworkQuest(skillType);
         }
         break;
@@ -3617,17 +3836,12 @@ class GameEngine extends ChangeNotifier {
     if (!alreadyRead) {
       final fragment = CodexFragments.findById(fragmentId)!;
       final skillType = SkillType.lore;
-      final oldSkill = _skills[skillType]!;
-      final newSkill = oldSkill.addXp(15.0 * getXpMultiplier());
-      _skills[skillType] = newSkill;
       log("Read Codex Fragment: ${fragment.title} (+15 Lore XP)", LogType.success);
-      if (newSkill.level > oldSkill.level) {
-        log("Level Up! Your ${skillType.name} is now Level ${newSkill.level}!", LogType.levelUp);
-        _levelUpController.add(LevelUpEvent(skillType, newSkill.level));
-      }
+      _grantSkillXp(skillType, 15.0 * getXpMultiplier());
       _maybeOfferMasterworkQuest(skillType);
       
       _notifyQuestObservers(CodexFragmentReadEvent(fragmentId));
+      _updateDailyTaskProgress(CodexFragmentReadEvent(fragmentId));
       _checkMilestones();
     }
     notifyListeners();
@@ -4001,6 +4215,16 @@ class GameEngine extends ChangeNotifier {
         break;
     }
 
+    // Decrement durability
+    if (stance == PlayerStance.strike || stance == PlayerStance.heavyStrike) {
+      if (_equippedWeaponSlot != null) {
+        _decrementDurability(_equippedWeaponSlot!, slot: 'weapon');
+      }
+    }
+    if (playerDmgTaken > 0 && _equippedArmorSlot != null) {
+      _decrementDurability(_equippedArmorSlot!, slot: 'armor');
+    }
+
     // Check phase transition
     _checkEchoPhaseTransition();
 
@@ -4211,6 +4435,9 @@ class GameEngine extends ChangeNotifier {
       }
     }
 
+    _notifyQuestObservers(CustomQuestEvent('breach_cleansed'));
+    _updateDailyTaskProgress(CustomQuestEvent('breach_cleansed'));
+    _checkAndUnlockAchievements();
     _checkMilestones();
     playSfx('ui_masterwork_complete');
     notifyListeners();
@@ -4528,7 +4755,7 @@ class GameEngine extends ChangeNotifier {
         break;
       case EventRewardKind.skillXp:
         final skill = SkillType.values.firstWhere((s) => s.name == r.targetId);
-        _skills[skill] = _skills[skill]!.addXp(r.amount.toDouble());
+        _grantSkillXp(skill, r.amount.toDouble());
         break;
       case EventRewardKind.fragment:
         final tag = CodexTag.values.firstWhere((t) => t.name == r.targetId);
@@ -4682,11 +4909,658 @@ class GameEngine extends ChangeNotifier {
     _completePlayerAction();
   }
 
+  int calculateMaxDurability(Item item, QualityTier? quality, List<String> affixIds) {
+    if (item.value == 0) return 0;
+    int base;
+    switch (quality ?? QualityTier.standard) {
+      case QualityTier.crude: base = 75;
+      case QualityTier.standard: base = 100;
+      case QualityTier.fine: base = 150;
+      case QualityTier.masterwork: base = 250;
+    }
+    if (affixIds.contains('sturdy')) base = (base * 1.5).round();
+    return base;
+  }
+
+  InventorySlot ensureDurabilityStamped(InventorySlot slot) {
+    if (slot.maxDurability == 0 && slot.item.value > 0 &&
+        (slot.item.isTool || slot.item.isWeapon || slot.item.isArmor)) {
+      final maxDur = calculateMaxDurability(slot.item, slot.quality, slot.affixIds);
+      return slot.copyWith(currentDurability: maxDur, maxDurability: maxDur);
+    }
+    return slot;
+  }
+
+  @visibleForTesting
+  int calculateMaxDurabilityForTest(Item item, QualityTier? quality, List<String> affixIds) =>
+      calculateMaxDurability(item, quality, affixIds);
+
+  final Set<String> _lowDurabilityWarned = {};
+
+  void _decrementDurability(InventorySlot equipped, {required String slot, SkillType? skill}) {
+    if (equipped.maxDurability == 0) return;
+    final newDur = (equipped.currentDurability - 1).clamp(0, equipped.maxDurability);
+    final updated = equipped.copyWith(currentDurability: newDur);
+
+    switch (slot) {
+      case 'tool':
+        _equippedToolSlots[skill!] = updated;
+        break;
+      case 'weapon':
+        _equippedWeaponSlot = updated;
+        break;
+      case 'armor':
+        _equippedArmorSlot = updated;
+        break;
+    }
+
+    final pct = newDur / equipped.maxDurability;
+    if (pct <= 0.25 && !_lowDurabilityWarned.contains(equipped.item.id)) {
+      _lowDurabilityWarned.add(equipped.item.id);
+      log("⚠️ ${equipped.item.icon} ${equipped.item.name} is wearing thin (${newDur}/${equipped.maxDurability}).", LogType.warning);
+      // AudioEngine mock call or no-op since no audio is present
+    }
+    notifyListeners();
+  }
+
+  @visibleForTesting
+  void equipForTest(Item item, SkillType skill) {
+    final maxDur = calculateMaxDurability(item, QualityTier.standard, []);
+    _equippedToolSlots[skill] = InventorySlot(
+      item: item,
+      quantity: 1,
+      quality: QualityTier.standard,
+      affixIds: [],
+      currentDurability: maxDur,
+      maxDurability: maxDur,
+    );
+  }
+
+  @visibleForTesting
+  void equipWeaponForTest(Item item) {
+    final maxDur = calculateMaxDurability(item, QualityTier.standard, []);
+    _equippedWeaponSlot = InventorySlot(
+      item: item,
+      quantity: 1,
+      quality: QualityTier.standard,
+      affixIds: [],
+      currentDurability: maxDur,
+      maxDurability: maxDur,
+    );
+  }
+
+  @visibleForTesting
+  void equipArmorForTest(Item item) {
+    final maxDur = calculateMaxDurability(item, QualityTier.standard, []);
+    _equippedArmorSlot = InventorySlot(
+      item: item,
+      quantity: 1,
+      quality: QualityTier.standard,
+      affixIds: [],
+      currentDurability: maxDur,
+      maxDurability: maxDur,
+    );
+  }
+
+  @visibleForTesting
+  void completeGatherActionForTest(SkillType skill) {
+    final tool = _equippedToolSlots[skill];
+    if (tool != null) {
+      _decrementDurability(tool, slot: 'tool', skill: skill);
+    }
+  }
+
+  @visibleForTesting
+  void runCombatRoundForTest(PlayerStance stance) {
+    if (stance == PlayerStance.strike || stance == PlayerStance.heavyStrike) {
+      if (_equippedWeaponSlot != null) {
+        _decrementDurability(_equippedWeaponSlot!, slot: 'weapon');
+      }
+    }
+  }
+
+  @visibleForTesting
+  void simulateCombatDamageForTest({required int playerDmgTaken}) {
+    if (playerDmgTaken > 0 && _equippedArmorSlot != null) {
+      _decrementDurability(_equippedArmorSlot!, slot: 'armor');
+    }
+  }
+
+  bool isSlotWorn(InventorySlot? slot) {
+    if (slot == null || slot.maxDurability == 0) return false;
+    return slot.currentDurability <= 0;
+  }
+
+  @visibleForTesting
+  void setEquippedWeaponForTest(InventorySlot slot) {
+    _equippedWeaponSlot = slot;
+  }
+
+  @visibleForTesting
+  void setEquippedArmorForTest(InventorySlot slot) {
+    _equippedArmorSlot = slot;
+  }
+
+  @visibleForTesting
+  void forceEquippedDurabilityForTest(SkillType skill, int newDur) {
+    final tool = _equippedToolSlots[skill]!;
+    _equippedToolSlots[skill] = tool.copyWith(currentDurability: newDur);
+  }
+
+  @visibleForTesting
+  List<LogEntry> get logsForTest => _logs;
+
+  void _setEquippedSlot(String slot, InventorySlot updated, {SkillType? skill}) {
+    switch (slot) {
+      case 'tool':
+        _equippedToolSlots[skill!] = updated;
+        break;
+      case 'weapon':
+        _equippedWeaponSlot = updated;
+        break;
+      case 'armor':
+        _equippedArmorSlot = updated;
+        break;
+    }
+  }
+
+  Map<String, int> calculateRepairCost(InventorySlot slot) {
+    final recipe = Recipes.findByResultItemId(slot.item.id);
+    if (recipe == null) return {};
+    return recipe.inputs.map((id, qty) => MapEntry(id, max(1, (qty * 0.25).ceil())));
+  }
+
+  bool canRepairWithMaterials(InventorySlot slot) {
+    final cost = calculateRepairCost(slot);
+    if (cost.isEmpty) return false;
+    for (final entry in cost.entries) {
+      if (!_inventory.hasItem(entry.key, entry.value)) return false;
+    }
+    return true;
+  }
+
+  void repairWithMaterials(InventorySlot equipped, {required String slot, SkillType? skill}) {
+    final cost = calculateRepairCost(equipped);
+    if (cost.isEmpty) return;
+    for (final entry in cost.entries) {
+      if (!_inventory.hasItem(entry.key, entry.value)) return;
+    }
+    for (final entry in cost.entries) {
+      _inventory = _inventory.removeItem(entry.key, entry.value);
+    }
+    final updated = equipped.copyWith(currentDurability: equipped.maxDurability);
+    _setEquippedSlot(slot, updated, skill: skill);
+    log("Repaired ${equipped.item.icon} ${equipped.item.name} at the Crafting Bench.", LogType.success);
+    _lowDurabilityWarned.remove(equipped.item.id);
+    _anyRepairThisRun = true;
+    _engineFlags.add('ach_first_repair');
+    _checkAndUnlockAchievements();
+    notifyListeners();
+  }
+
+  int calculateRepairGoldCost(InventorySlot slot) {
+    if (slot.maxDurability == 0) return 0;
+    final damagePct = (slot.maxDurability - slot.currentDurability) / slot.maxDurability;
+    return max(1, (slot.item.value * 0.25 * damagePct).ceil());
+  }
+
+  void repairWithGold(InventorySlot equipped, {required String slot, SkillType? skill}) {
+    final cost = calculateRepairGoldCost(equipped);
+    if (_playerStats.gold < cost) return;
+    _playerStats = _playerStats.copyWith(gold: _playerStats.gold - cost);
+    final updated = equipped.copyWith(currentDurability: equipped.maxDurability);
+    _setEquippedSlot(slot, updated, skill: skill);
+    log("Repaired ${equipped.item.icon} ${equipped.item.name} (-$cost gold).", LogType.success);
+    _lowDurabilityWarned.remove(equipped.item.id);
+    _anyRepairThisRun = true;
+    _engineFlags.add('ach_first_repair');
+    _checkAndUnlockAchievements();
+    notifyListeners();
+  }
+
+  @visibleForTesting
+  Map<String, int> calculateRepairCostForTest(InventorySlot slot) => calculateRepairCost(slot);
+
+  @visibleForTesting
+  int calculateRepairGoldCostForTest(InventorySlot slot) => calculateRepairGoldCost(slot);
+
   @visibleForTesting
   bool isFragmentPoolOpenForTest(CodexTag tag) => _isFragmentPoolOpen(tag);
 
   @visibleForTesting
   Set<String> get firedMilestoneIdsForTest => firedMilestoneIds;
+
+  void _generateSessionSpawns() {
+    if (_reagentSpawns.isNotEmpty) return;
+
+    final rng = Random();
+    final count = rng.nextInt(3) + 2; // 2 to 4 spawns
+
+    final reagents = [
+      const ReagentSpawn(
+        itemId: 'moonpetal',
+        noticeText: 'A glowing Moonpetal blossom catches your eye in the brush.',
+        requiredSkill: SkillType.herbalism,
+        zoneId: '',
+      ),
+      const ReagentSpawn(
+        itemId: 'spirit_sap',
+        noticeText: 'A rare glob of glowing Spirit Sap clings to a nearby trunk.',
+        requiredSkill: SkillType.woodcutting,
+        zoneId: '',
+      ),
+      const ReagentSpawn(
+        itemId: 'hollow_bone',
+        noticeText: 'A weightless, ancient Hollow Bone lies near the path.',
+        requiredSkill: SkillType.combat,
+        zoneId: '',
+      ),
+      const ReagentSpawn(
+        itemId: 'sea_tear',
+        noticeText: 'A shimmering, frozen Sea-Tear glints in a tidal pool.',
+        requiredSkill: SkillType.wayfinding,
+        zoneId: '',
+      ),
+      const ReagentSpawn(
+        itemId: 'coalblood',
+        noticeText: 'A pool of dark, viscous Coalblood seeps from a rock fissure.',
+        requiredSkill: SkillType.mining,
+        zoneId: '',
+      ),
+      const ReagentSpawn(
+        itemId: 'wisp_light',
+        noticeText: 'A flickering Wisp-Light dances near the ancient inscriptions.',
+        requiredSkill: SkillType.lore,
+        zoneId: '',
+      ),
+    ];
+
+    final biomesMap = {
+      'moonpetal': ['whispering_woods_1', 'whispering_woods_2'],
+      'spirit_sap': ['whispering_woods_1', 'whispering_woods_2'],
+      'hollow_bone': ['whispering_woods_2', 'darkstone_mine_1', 'darkstone_mine_2'],
+      'sea_tear': ['sundered_coast_1', 'sundered_coast_2'],
+      'coalblood': ['darkstone_mine_1', 'darkstone_mine_2'],
+      'wisp_light': ['whispering_woods_3', 'darkstone_mine_3', 'sundered_coast_3'],
+    };
+
+    final potentialFallbackZones = _unlockedZoneIds.where((id) => id != 'town_square').toList();
+    if (potentialFallbackZones.isEmpty) return; // Can't spawn if only town square is unlocked
+
+    for (int i = 0; i < count; i++) {
+      final baseReagent = reagents[rng.nextInt(reagents.length)];
+      final biomes = biomesMap[baseReagent.itemId] ?? [];
+      final validUnlockedBiomes = biomes.where((id) => _unlockedZoneIds.contains(id)).toList();
+
+      String chosenZoneId;
+      if (validUnlockedBiomes.isNotEmpty) {
+        chosenZoneId = validUnlockedBiomes[rng.nextInt(validUnlockedBiomes.length)];
+      } else {
+        chosenZoneId = potentialFallbackZones[rng.nextInt(potentialFallbackZones.length)];
+      }
+
+      _reagentSpawns.add(baseReagent.copyWith(zoneId: chosenZoneId));
+    }
+  }
+
+  List<ReagentSpawn> getUncollectedSpawnsForZone(String zoneId) {
+    return _reagentSpawns.where((s) => s.zoneId == zoneId && !s.isCollected).toList();
+  }
+
+  void collectReagentSpawn(ReagentSpawn spawn) {
+    if (spawn.isCollected) {
+      log("This reagent has already been collected!", LogType.error);
+      return;
+    }
+    if (_playerStats.currentEnergy < spawn.energyCost) {
+      log("Not enough energy to collect ${Items.findById(spawn.itemId)?.name ?? 'reagent'}!", LogType.error);
+      return;
+    }
+    final skillState = _skills[spawn.requiredSkill];
+    if (skillState == null || skillState.level < spawn.requiredLevel) {
+      log("Requires ${spawn.requiredSkill.name} level ${spawn.requiredLevel} to collect this!", LogType.error);
+      return;
+    }
+    if (_inventory.isFull) {
+      log("Inventory full! Cannot collect ${Items.findById(spawn.itemId)?.name ?? 'reagent'}.", LogType.error);
+      return;
+    }
+
+    _playerStats = _playerStats.copyWith(currentEnergy: _playerStats.currentEnergy - spawn.energyCost);
+
+    final idx = _reagentSpawns.indexWhere((s) => s.itemId == spawn.itemId && s.zoneId == spawn.zoneId && !s.isCollected);
+    if (idx != -1) {
+      _reagentSpawns[idx] = spawn.copyWith(isCollected: true);
+    }
+
+    final item = Items.findById(spawn.itemId)!;
+    _inventory = _inventory.addItem(item, 1);
+
+    log("Gathered ${item.icon} ${item.name} using ${spawn.requiredSkill.name}.", LogType.success);
+    notifyListeners();
+  }
+
+  // --- Spec 6a & 6b helper methods ---
+
+  void _grantSkillXp(SkillType type, double amount) {
+    final playerXpGain = (amount * 0.2).round();
+    if (playerXpGain > 0) {
+      _addPlayerXp(playerXpGain);
+    }
+
+    final oldSkill = _skills[type]!;
+    final newSkill = oldSkill.addXp(amount);
+    _skills[type] = newSkill;
+
+    if (newSkill.level > oldSkill.level) {
+      final skillNameFormatted = type.name[0].toUpperCase() + type.name.substring(1);
+      log("Level Up! Your $skillNameFormatted is now Level ${newSkill.level}!", LogType.levelUp);
+      _levelUpController.add(LevelUpEvent(type, newSkill.level));
+      _recomputeTitle();
+    } else if (newSkill.isGated && !oldSkill.isGated) {
+      log("Limit Reached! Level ${newSkill.levelCap} Masterwork Trial is now unlocked. Check the Skills tab.", LogType.warning);
+    }
+
+    _checkAndUnlockAchievements();
+  }
+
+  void grantSkillXpForTesting(SkillType type, double amount) {
+    _grantSkillXp(type, amount);
+  }
+
+  void addEngineFlagForTesting(String flag) {
+    _engineFlags.add(flag);
+    _checkAndUnlockAchievements();
+    notifyListeners();
+  }
+
+  void earnAchievementForTesting(String id) {
+    _earnedAchievementIds.add(id);
+    _checkAndUnlockAchievements();
+    notifyListeners();
+  }
+
+  void _addPlayerXp(int amount) {
+    final prevLvl = _playerStats.playerLevel;
+    final res = PlayerProgression.applyXp(_playerStats.playerLevel, _playerStats.playerXp, amount);
+    _playerStats = _playerStats.copyWith(
+      playerLevel: res.level,
+      playerXp: res.xp,
+    );
+
+    if (res.didLevelUp) {
+      for (int l = prevLvl + 1; l <= res.level; l++) {
+        log("🌟 Player Leveled Up! Level $l reached!", LogType.levelUp);
+      }
+      _checkAndUnlockAchievements();
+    }
+  }
+
+  void _recomputeTitle() {
+    final title = TitleResolver.resolve(_skills);
+    if (_playerStats.title != title) {
+      _playerStats = _playerStats.copyWith(title: title);
+      log("🏷️ Earned Title: $title!", LogType.success);
+    }
+  }
+
+  void _checkAndUnlockAchievements() {
+    final newlyUnlocked = AchievementEngine.checkAll(this);
+    if (newlyUnlocked.isNotEmpty) {
+      for (final id in newlyUnlocked) {
+        _earnedAchievementIds.add(id);
+        final ach = Achievements.all.firstWhere((a) => a.id == id);
+        log("🏆 Achievement Unlocked: ${ach.name}! ${ach.description}", LogType.success);
+      }
+      notifyListeners();
+    }
+  }
+
+  MerchantReputation getMerchantReputation(String merchantId) {
+    return _merchantRep.putIfAbsent(merchantId, () => MerchantReputation(merchantId: merchantId));
+  }
+
+  bool isGiftClaimed(String merchantId) {
+    return _claimedGifts.contains(merchantId);
+  }
+
+  void claimHonoredFriendGift(String merchantId) {
+    if (_claimedGifts.contains(merchantId)) return;
+    _claimedGifts.add(merchantId);
+
+    switch (merchantId) {
+      case 'cedric':
+        unlockRandomBlueprintRecipe();
+        break;
+      case 'hilda':
+        final learnable = Recipes.all.where((r) => r.rarity != RecipeRarity.common && !_knownRecipeIds.contains(r.id)).toList();
+        if (learnable.isNotEmpty) {
+          final selected = learnable[_random.nextInt(learnable.length)];
+          _knownRecipeIds.add(selected.id);
+          log("📘 Hilda gifted you a rare blueprint: ${selected.name}!", LogType.success);
+        } else {
+          _playerStats = _playerStats.copyWith(gold: _playerStats.gold + 100);
+          log("Hilda gifted you 100 Gold since you know all recipes!", LogType.success);
+        }
+        break;
+      case 'pippin':
+        _inventory = _inventory.addItem(Items.wispLight, 1);
+        log("🧪 Pippin gifted you a Wisp-Light!", LogType.success);
+        break;
+      case 'silas':
+        final unread = CodexFragments.all.where((f) => f.tag == CodexTag.oldEmpire && !_knownCodexFragmentIds.contains(f.id)).toList();
+        if (unread.isNotEmpty) {
+          final selected = unread[_random.nextInt(unread.length)];
+          _grantFragment(selected);
+          _notifyQuestObservers(CodexFragmentReadEvent(selected.id));
+          log("📖 Silas gifted you an ancient Old Empire Codex fragment: ${selected.title}!", LogType.success);
+        } else {
+          _playerStats = _playerStats.copyWith(gold: _playerStats.gold + 100);
+          log("Silas gifted you 100 Gold since you read all Old Empire fragments!", LogType.success);
+        }
+        break;
+      case 'maeve':
+        final tools = [Items.copperAxe, Items.copperPickaxe, Items.reinforcedGloves];
+        final tool = tools[_random.nextInt(tools.length)];
+        final maxDur = calculateMaxDurability(tool, QualityTier.standard, const []);
+        _inventory = _inventory.addItem(tool, 1, QualityTier.standard, const [], maxDur, maxDur);
+        log("🏹 Maeve gifted you a Fine tool: ${tool.name}!", LogType.success);
+        break;
+      case 'bram':
+        _inventory = _inventory.addItem(Items.bakedPotato, 5);
+        log("🍺 Bram gifted you 5 Baked Potatoes!", LogType.success);
+        break;
+    }
+    _checkAndUnlockAchievements();
+    notifyListeners();
+  }
+
+  void setActiveMerchantById(String merchantId) {
+    final idx = _shopState.activeMerchants.indexWhere((m) => m.id == merchantId);
+    if (idx != -1) {
+      _shopState = _shopState.copyWith(activeMerchantIndex: idx);
+    } else {
+      final merchant = Merchant.all.firstWhere((m) => m.id == merchantId, orElse: () => Merchant.bram);
+      final newActive = List<Merchant>.from(_shopState.activeMerchants)..add(merchant);
+      _shopState = _shopState.copyWith(
+        activeMerchants: newActive,
+        activeMerchantIndex: newActive.length - 1,
+      );
+    }
+    notifyListeners();
+  }
+
+  void addMerchantReputation(String merchantId, int amount) {
+    final current = getMerchantReputation(merchantId);
+    if (current.sessionReputation >= 200) {
+      return;
+    }
+    final allowed = (200 - current.sessionReputation).clamp(0, amount);
+    if (allowed <= 0) return;
+
+    final updated = current.copyWith(
+      totalReputation: current.totalReputation + allowed,
+      sessionReputation: current.sessionReputation + allowed,
+    );
+    _merchantRep[merchantId] = updated;
+
+    _checkReputationFragmentUnlocks(merchantId, current.tier, updated.tier);
+    _checkAndUnlockAchievements();
+    notifyListeners();
+  }
+
+  void _checkReputationFragmentUnlocks(String merchantId, ReputationTier oldTier, ReputationTier newTier) {
+    if (oldTier != ReputationTier.swornCompanion && newTier == ReputationTier.swornCompanion) {
+      final fragmentId = 'companion_$merchantId';
+      unlockFragmentDirectly(fragmentId);
+    }
+  }
+
+  void unlockFragmentDirectly(String fragmentId) {
+    if (_knownCodexFragmentIds.contains(fragmentId)) return;
+    final fragment = CodexFragments.findById(fragmentId);
+    if (fragment != null) {
+      _grantFragment(fragment);
+      _notifyQuestObservers(CodexFragmentReadEvent(fragmentId));
+    }
+  }
+
+  void _generateTodaysTasks() {
+    if (_todaysTasks.isNotEmpty) return;
+
+    final eligibleTemplates = DailyTasks.all.where((t) {
+      if (t.requiredSkill == null) return true;
+      final skillLevel = _skills[t.requiredSkill]?.level ?? 1;
+      return skillLevel >= t.requiredLevel;
+    }).toList();
+
+    if (eligibleTemplates.isEmpty) return;
+
+    eligibleTemplates.shuffle(_random);
+    final selected = eligibleTemplates.take(3).toList();
+    _todaysTasks = selected.map((t) {
+      return DailyTask(
+        id: t.id,
+        name: t.name,
+        category: t.category,
+        targetId: t.targetId,
+        targetCount: t.targetCount,
+        rewardGold: t.rewardGold,
+      );
+    }).toList();
+
+    // Reset session reputation for all merchants when daily tasks refresh (new day)
+    for (final id in _merchantRep.keys) {
+      _merchantRep[id] = _merchantRep[id]!.copyWith(sessionReputation: 0);
+    }
+
+    _dailyBonusClaimed = false;
+    log("📝 Check the Daily Notice Board for today's requests!", LogType.info);
+  }
+
+  void forceGenerateDailyTasksForTesting() {
+    _todaysTasks = [];
+    _generateTodaysTasks();
+  }
+
+  void _updateDailyTaskProgress(QuestEvent event) {
+    if (_todaysTasks.isEmpty) return;
+    bool changed = false;
+    for (int i = 0; i < _todaysTasks.length; i++) {
+      final task = _todaysTasks[i];
+      if (task.isCompleted) continue;
+
+      bool matches = false;
+      int increment = event.count;
+
+      switch (task.category) {
+        case DailyTaskCategory.gather:
+          matches = event is ItemGatheredEvent && event.itemId == task.targetId;
+          break;
+        case DailyTaskCategory.hunt:
+          matches = event is BeastDefeatedEvent && event.beastId == task.targetId;
+          break;
+        case DailyTaskCategory.visit:
+          matches = event is ZoneVisitedEvent && event.zoneId == task.targetId;
+          break;
+        case DailyTaskCategory.craft:
+          matches = event is ItemCraftedEvent && (task.targetId == 'any' || event.recipeId == task.targetId);
+          break;
+        case DailyTaskCategory.codex:
+          matches = event is CodexFragmentReadEvent;
+          break;
+        case DailyTaskCategory.cleanse:
+          matches = event is CustomQuestEvent && event.eventId == task.targetId;
+          break;
+      }
+
+      if (matches) {
+        final newCount = min(task.targetCount, task.currentCount + increment);
+        if (newCount != task.currentCount) {
+          _todaysTasks[i] = task.copyWith(
+            currentCount: newCount,
+            isCompleted: newCount >= task.targetCount,
+          );
+          changed = true;
+          if (_todaysTasks[i].isCompleted) {
+            log("📝 Daily Task Completed: ${task.name}!", LogType.success);
+          }
+        }
+      }
+    }
+    if (changed) {
+      _checkAndUnlockAchievements();
+      notifyListeners();
+    }
+  }
+
+  void claimDailyTaskReward(String taskId) {
+    final idx = _todaysTasks.indexWhere((t) => t.id == taskId);
+    if (idx == -1) return;
+    final task = _todaysTasks[idx];
+    if (!task.isCompleted || task.isClaimed) return;
+
+    _todaysTasks[idx] = task.copyWith(isClaimed: true);
+    _playerStats = _playerStats.copyWith(gold: _playerStats.gold + task.rewardGold);
+    _lifetimeGold += task.rewardGold;
+    log("💰 Claimed ${task.rewardGold}g reward for completing daily task: ${task.name}.", LogType.success);
+
+    _checkAndUnlockAchievements();
+    notifyListeners();
+  }
+
+  void claimDailyBonus() {
+    if (_todaysTasks.isEmpty || !_todaysTasks.every((t) => t.isCompleted)) return;
+    if (_dailyBonusClaimed) return;
+
+    _dailyBonusClaimed = true;
+    _playerStats = _playerStats.copyWith(gold: _playerStats.gold + 120);
+    _lifetimeGold += 120;
+    log("🎁 Claimed Daily Notice Board Bonus! +120 Gold.", LogType.success);
+
+    final rolledBlueprint = _random.nextDouble() < 0.05;
+    if (rolledBlueprint) {
+      unlockRandomBlueprintRecipe();
+    } else {
+      log("No blueprint found in the notice board rewards today.", LogType.info);
+    }
+
+    _checkAndUnlockAchievements();
+    notifyListeners();
+  }
+
+  void unlockRandomBlueprintRecipe() {
+    final learnable = Recipes.all.where((r) => r.rarity != RecipeRarity.common && !_knownRecipeIds.contains(r.id)).toList();
+    if (learnable.isNotEmpty) {
+      final selected = learnable[_random.nextInt(learnable.length)];
+      _knownRecipeIds.add(selected.id);
+      log("📘 Discovered Recipe Blueprint: ${selected.name}!", LogType.success);
+      _checkAndUnlockAchievements();
+      notifyListeners();
+    } else {
+      log("You have already unlocked all available recipe blueprints!", LogType.info);
+    }
+  }
 
   @override
   void dispose() {

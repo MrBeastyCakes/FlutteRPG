@@ -1,4 +1,7 @@
 import 'quest.dart';
+import 'crafted_item.dart';
+import 'item.dart';
+import 'shop.dart';
 
 enum CodexTag { wilds, stone, tide, source, oldEmpire, misc }
 
@@ -430,6 +433,55 @@ class CodexFragments {
       sourceHint: "Found at: any Obelisk (very rare)",
       orderInTag: 10,
     ),
+    // --- Sworn Companion Story Fragments (Spec 6a) ---
+    CodexFragment(
+      id: 'companion_cedric',
+      tag: CodexTag.misc,
+      title: "Cedric's Ledger",
+      text: "Cedric's journal records not profits, but names of lost towns. 'Trade is the thread that keeps us from forgetting,' he wrote in the margin.",
+      sourceHint: "Unlocked at: Cedric Sworn Companion status",
+      orderInTag: 1,
+    ),
+    CodexFragment(
+      id: 'companion_hilda',
+      tag: CodexTag.misc,
+      title: "Hilda's Hammer",
+      text: "Hilda doesn't forge for the living; she hammers to keep the ghosts quiet. 'Every strike must ring clear,' she says, 'or they creep back in.'",
+      sourceHint: "Unlocked at: Hilda Sworn Companion status",
+      orderInTag: 2,
+    ),
+    CodexFragment(
+      id: 'companion_pippin',
+      tag: CodexTag.misc,
+      title: "Pippin's Formula",
+      text: "Pippin searches for a cure to the world's rot. 'The soil forgets its name,' he writes. 'A draught of spirit sap can make it remember, if only for an hour.'",
+      sourceHint: "Unlocked at: Pippin Sworn Companion status",
+      orderInTag: 3,
+    ),
+    CodexFragment(
+      id: 'companion_silas',
+      tag: CodexTag.misc,
+      title: "Silas's Archive",
+      text: "Silas guards the records of the First Age. 'Hope was their undoing,' he whispers. 'They thought the beacons were permanent. They forgot that everything decays.'",
+      sourceHint: "Unlocked at: Silas Sworn Companion status",
+      orderInTag: 4,
+    ),
+    CodexFragment(
+      id: 'companion_maeve',
+      tag: CodexTag.misc,
+      title: "Maeve's Blueprint",
+      text: "Maeve designs tools to mend what has cracked. 'A tool is a promise between the hand and the world,' she says. 'When it breaks, the promise is broken.'",
+      sourceHint: "Unlocked at: Maeve Sworn Companion status",
+      orderInTag: 5,
+    ),
+    CodexFragment(
+      id: 'companion_bram',
+      tag: CodexTag.misc,
+      title: "Bram's Remembrance",
+      text: "Bram keeps the fire lit for those who do not return. 'A warm hearth and a full cup,' he tells the empty chairs. 'We wait until the watch is done.'",
+      sourceHint: "Unlocked at: Bram Sworn Companion status",
+      orderInTag: 6,
+    ),
   ];
 
   static CodexFragment? findById(String id) {
@@ -470,26 +522,433 @@ class RegionStatusInfo {
   });
 }
 
+enum AchievementCategory { firstSteps, mastery, combat, crafting, lore, economy, hidden }
+
+enum AchievementTrigger {
+  questComplete,
+  beastDefeated,
+  fragmentCollected,
+  craftComplete,
+  recipeUnlocked,
+  zoneEntered,
+  zoneCleansed,
+  merchantTier,
+  playerLevel,
+  skillLevel,
+  goldEarned,
+  totalLevel,
+  custom,
+}
+
 class Achievement {
   final String id;
   final String name;
   final String description;
   final String icon;             // emoji
+  final AchievementCategory category;
   final bool hidden;             // hidden achievements don't appear until earned
-  final String? titleUnlock;     // optional Title text granted on unlock
+  final AchievementTrigger trigger;
+  final Map<String, dynamic> criteria;
+  final String? bestiaryHintBeastId;
 
   const Achievement({
     required this.id,
     required this.name,
     required this.description,
     required this.icon,
+    required this.category,
+    required this.trigger,
+    required this.criteria,
     this.hidden = false,
-    this.titleUnlock,
+    this.bestiaryHintBeastId,
   });
 }
 
 class Achievements {
-  static const List<Achievement> all = [];  // empty in Spec 1; Spec 6 fills
+  static final List<Achievement> all = [
+    // --- First Steps (6) ---
+    Achievement(
+      id: 'first_gather',
+      name: 'First Harvest',
+      description: 'Take your first step into gathering resources.',
+      icon: '🌱',
+      category: AchievementCategory.firstSteps,
+      trigger: AchievementTrigger.custom,
+      criteria: const {'key': 'first_gather'},
+    ),
+    Achievement(
+      id: 'first_kill',
+      name: 'Drew First Blood',
+      description: 'Defeat a wild beast for the first time.',
+      icon: '🗡️',
+      category: AchievementCategory.firstSteps,
+      trigger: AchievementTrigger.beastDefeated,
+      criteria: const {'beastId': 'any', 'count': 1},
+    ),
+    Achievement(
+      id: 'first_craft',
+      name: 'Forged in Earnest',
+      description: 'Craft your first item at a workbench.',
+      icon: '🔨',
+      category: AchievementCategory.firstSteps,
+      trigger: AchievementTrigger.craftComplete,
+      criteria: const {'count': 1},
+    ),
+    Achievement(
+      id: 'first_fragment',
+      name: 'Loose Page',
+      description: 'Find your first lost Codex fragment.',
+      icon: '📜',
+      category: AchievementCategory.firstSteps,
+      trigger: AchievementTrigger.fragmentCollected,
+      criteria: const {'tag': 'any', 'count': 1},
+    ),
+    Achievement(
+      id: 'first_quest_done',
+      name: 'A Task Completed',
+      description: 'Complete your first main or side quest.',
+      icon: '✅',
+      category: AchievementCategory.firstSteps,
+      trigger: AchievementTrigger.questComplete,
+      criteria: const {'count': 1},
+    ),
+    Achievement(
+      id: 'reach_town_square',
+      name: 'Found Home',
+      description: 'Return to or discover the Town Square.',
+      icon: '🏘️',
+      category: AchievementCategory.firstSteps,
+      trigger: AchievementTrigger.zoneEntered,
+      criteria: const {'zoneId': 'town_square'},
+    ),
+
+    // --- Mastery (6) ---
+    Achievement(
+      id: 'skill_first_10',
+      name: 'First Cap',
+      description: 'Raise any skill to level 10.',
+      icon: '🎯',
+      category: AchievementCategory.mastery,
+      trigger: AchievementTrigger.skillLevel,
+      criteria: const {'level': 10},
+    ),
+    Achievement(
+      id: 'skill_first_20',
+      name: 'Cap Broken',
+      description: 'Raise any skill to level 20.',
+      icon: '🔓',
+      category: AchievementCategory.mastery,
+      trigger: AchievementTrigger.skillLevel,
+      criteria: const {'level': 20},
+    ),
+    Achievement(
+      id: 'skill_first_masterwork',
+      name: 'Masterpiece',
+      description: 'Complete your first Masterwork challenge.',
+      icon: '🏅',
+      category: AchievementCategory.mastery,
+      trigger: AchievementTrigger.custom,
+      criteria: const {'key': 'first_masterwork'},
+    ),
+    Achievement(
+      id: 'all_skills_5',
+      name: 'Well-Rounded',
+      description: 'Raise all skills to level 5 or higher.',
+      icon: '⚖️',
+      category: AchievementCategory.mastery,
+      trigger: AchievementTrigger.custom,
+      criteria: const {'key': 'all_skills_5'},
+    ),
+    Achievement(
+      id: 'all_skills_10',
+      name: 'Polymath',
+      description: 'Raise all skills to level 10 or higher.',
+      icon: '🧠',
+      category: AchievementCategory.mastery,
+      trigger: AchievementTrigger.custom,
+      criteria: const {'key': 'all_skills_10'},
+    ),
+    Achievement(
+      id: 'total_skill_50',
+      name: 'Half-Centurion',
+      description: 'Reach a combined skill level of 50.',
+      icon: '💯',
+      category: AchievementCategory.mastery,
+      trigger: AchievementTrigger.totalLevel,
+      criteria: const {'sum': 50},
+    ),
+
+    // --- Combat (6) ---
+    Achievement(
+      id: 'boar_hunter',
+      name: 'Tusker',
+      description: 'Defeat 5 Forest Boars.',
+      icon: '🐗',
+      category: AchievementCategory.combat,
+      trigger: AchievementTrigger.beastDefeated,
+      criteria: const {'beastId': 'forest_boar', 'count': 5},
+      bestiaryHintBeastId: 'forest_boar',
+    ),
+    Achievement(
+      id: 'spider_lore',
+      name: 'Web-Walker',
+      description: 'Defeat 5 Cave Spiders.',
+      icon: '🕷️',
+      category: AchievementCategory.combat,
+      trigger: AchievementTrigger.beastDefeated,
+      criteria: const {'beastId': 'cave_spider', 'count': 5},
+      bestiaryHintBeastId: 'cave_spider',
+    ),
+    Achievement(
+      id: 'wolf_pack',
+      name: 'Lone Hunter',
+      description: 'Defeat 5 Shadow Wolves.',
+      icon: '🐺',
+      category: AchievementCategory.combat,
+      trigger: AchievementTrigger.beastDefeated,
+      criteria: const {'beastId': 'shadow_wolf', 'count': 5},
+      bestiaryHintBeastId: 'shadow_wolf',
+    ),
+    Achievement(
+      id: 'troll_breaker',
+      name: 'Stone-Cracker',
+      description: 'Defeat 3 Cavern Trolls.',
+      icon: '👹',
+      category: AchievementCategory.combat,
+      trigger: AchievementTrigger.beastDefeated,
+      criteria: const {'beastId': 'cavern_troll', 'count': 3},
+      bestiaryHintBeastId: 'cavern_troll',
+    ),
+    Achievement(
+      id: 'tide_culler',
+      name: 'Tide-Culler',
+      description: 'Defeat 8 Shore Crabs.',
+      icon: '🦀',
+      category: AchievementCategory.combat,
+      trigger: AchievementTrigger.beastDefeated,
+      criteria: const {'beastId': 'shore_crab', 'count': 8},
+      bestiaryHintBeastId: 'shore_crab',
+    ),
+    Achievement(
+      id: 'echo_slayer',
+      name: 'Echoeshaper',
+      description: 'Defeat all three Echoes of the Breaches.',
+      icon: '👁️',
+      category: AchievementCategory.combat,
+      trigger: AchievementTrigger.custom,
+      criteria: const {'key': 'defeat_all_echoes'},
+    ),
+
+    // --- Crafting (6) ---
+    Achievement(
+      id: 'crafter_10',
+      name: 'Bench Veteran',
+      description: 'Craft 10 items in total.',
+      icon: '🛠️',
+      category: AchievementCategory.crafting,
+      trigger: AchievementTrigger.craftComplete,
+      criteria: const {'count': 10},
+    ),
+    Achievement(
+      id: 'crafter_50',
+      name: 'Bench Master',
+      description: 'Craft 50 items in total.',
+      icon: '⚙️',
+      category: AchievementCategory.crafting,
+      trigger: AchievementTrigger.craftComplete,
+      criteria: const {'count': 50},
+    ),
+    Achievement(
+      id: 'masterwork_3',
+      name: 'Hands of the Source',
+      description: 'Craft 3 Masterwork-tier items.',
+      icon: '✨',
+      category: AchievementCategory.crafting,
+      trigger: AchievementTrigger.craftComplete,
+      criteria: const {'quality': QualityTier.masterwork, 'count': 3},
+    ),
+    Achievement(
+      id: 'recipe_10',
+      name: 'Recipe Hoarder',
+      description: 'Unlock 10 crafting recipes.',
+      icon: '📘',
+      category: AchievementCategory.crafting,
+      trigger: AchievementTrigger.recipeUnlocked,
+      criteria: const {'count': 10},
+    ),
+    Achievement(
+      id: 'brewer_first',
+      name: 'Brewer',
+      description: 'Brew your first herbal elixir or potion.',
+      icon: '🍷',
+      category: AchievementCategory.crafting,
+      trigger: AchievementTrigger.craftComplete,
+      criteria: const {'itemType': ItemType.brew, 'count': 1},
+    ),
+    Achievement(
+      id: 'repair_first',
+      name: 'Mender',
+      description: 'Perform your first equipment repair.',
+      icon: '🪛',
+      category: AchievementCategory.crafting,
+      trigger: AchievementTrigger.custom,
+      criteria: const {'key': 'first_repair'},
+    ),
+
+    // --- Lore (6) ---
+    Achievement(
+      id: 'fragments_wilds',
+      name: 'Wilds-Bound',
+      description: 'Collect 5 Codex fragments tagged under Wilds.',
+      icon: '🌳',
+      category: AchievementCategory.lore,
+      trigger: AchievementTrigger.fragmentCollected,
+      criteria: const {'tag': 'wilds', 'count': 5},
+    ),
+    Achievement(
+      id: 'fragments_stone',
+      name: 'Stone-Bound',
+      description: 'Collect 5 Codex fragments tagged under Stone.',
+      icon: '⛰️',
+      category: AchievementCategory.lore,
+      trigger: AchievementTrigger.fragmentCollected,
+      criteria: const {'tag': 'stone', 'count': 5},
+    ),
+    Achievement(
+      id: 'fragments_tide',
+      name: 'Tide-Bound',
+      description: 'Collect 5 Codex fragments tagged under Tide.',
+      icon: '🌊',
+      category: AchievementCategory.lore,
+      trigger: AchievementTrigger.fragmentCollected,
+      criteria: const {'tag': 'tide', 'count': 5},
+    ),
+    Achievement(
+      id: 'fragments_source',
+      name: 'Source-Bound',
+      description: 'Collect 3 Codex fragments tagged under Source.',
+      icon: '🔱',
+      category: AchievementCategory.lore,
+      trigger: AchievementTrigger.fragmentCollected,
+      criteria: const {'tag': 'source', 'count': 3},
+    ),
+    Achievement(
+      id: 'cleanse_first',
+      name: 'First Breach Sealed',
+      description: 'Seal a corrupted breach in any region.',
+      icon: '🕯️',
+      category: AchievementCategory.lore,
+      trigger: AchievementTrigger.zoneCleansed,
+      criteria: const {'tag': 'any'},
+    ),
+    Achievement(
+      id: 'cleanse_all',
+      name: 'Three Wounds Closed',
+      description: 'Seal all three corrupted breaches in Elaria.',
+      icon: '🪬',
+      category: AchievementCategory.lore,
+      trigger: AchievementTrigger.zoneCleansed,
+      criteria: const {'tag': 'all'},
+    ),
+
+    // --- Economy (6) ---
+    Achievement(
+      id: 'first_trade',
+      name: 'A Fair Bargain',
+      description: 'Transact with any merchant for the first time.',
+      icon: '🪙',
+      category: AchievementCategory.economy,
+      trigger: AchievementTrigger.custom,
+      criteria: const {'key': 'first_trade'},
+    ),
+    Achievement(
+      id: 'gold_500',
+      name: 'Coinwise',
+      description: 'Accumulate 500 gold over your lifetime.',
+      icon: '💰',
+      category: AchievementCategory.economy,
+      trigger: AchievementTrigger.goldEarned,
+      criteria: const {'cumulative': 500},
+    ),
+    Achievement(
+      id: 'gold_5000',
+      name: 'Coffer-Heavy',
+      description: 'Accumulate 5000 gold over your lifetime.',
+      icon: '💎',
+      category: AchievementCategory.economy,
+      trigger: AchievementTrigger.goldEarned,
+      criteria: const {'cumulative': 5000},
+    ),
+    Achievement(
+      id: 'trusted_first',
+      name: 'A Familiar Face',
+      description: 'Reach Trusted Patron status with any merchant.',
+      icon: '🤝',
+      category: AchievementCategory.economy,
+      trigger: AchievementTrigger.merchantTier,
+      criteria: const {'tier': ReputationTier.trustedPatron},
+    ),
+    Achievement(
+      id: 'sworn_first',
+      name: 'Sworn Companion',
+      description: 'Forge a deep bond of friendship with any merchant.',
+      icon: '💞',
+      category: AchievementCategory.economy,
+      trigger: AchievementTrigger.merchantTier,
+      criteria: const {'tier': ReputationTier.swornCompanion},
+    ),
+    Achievement(
+      id: 'sworn_all',
+      name: 'Six True Friends',
+      description: 'Reach Sworn Companion tier with all 6 merchants.',
+      icon: '🫂',
+      category: AchievementCategory.economy,
+      trigger: AchievementTrigger.custom,
+      criteria: const {'key': 'sworn_all_six'},
+    ),
+
+    // --- Hidden (4) ---
+    Achievement(
+      id: 'barehanded_kill',
+      name: 'Bare-Knuckle',
+      description: 'Defeat a beast in combat without any weapon equipped.',
+      icon: '✊',
+      category: AchievementCategory.hidden,
+      trigger: AchievementTrigger.custom,
+      criteria: const {'key': 'barehanded_kill'},
+      hidden: true,
+    ),
+    Achievement(
+      id: 'no_repair_run',
+      name: 'Tireless',
+      description: 'Reach a combined skill level of 30 without repairing any items.',
+      icon: '♾️',
+      category: AchievementCategory.hidden,
+      trigger: AchievementTrigger.custom,
+      criteria: const {'key': 'no_repair_total_30'},
+      hidden: true,
+    ),
+    Achievement(
+      id: 'feast_brewer',
+      name: 'Twilight Drinker',
+      description: 'Consume Pippin\'s legendary Elixir of Twilight.',
+      icon: '🥂',
+      category: AchievementCategory.hidden,
+      trigger: AchievementTrigger.custom,
+      criteria: const {'key': 'consume_elixir_of_twilight'},
+      hidden: true,
+    ),
+    Achievement(
+      id: 'obelisk_secrets',
+      name: 'Stone-Listener',
+      description: 'Unlock two Codex fragments in a single Obelisk inspection.',
+      icon: '🗿',
+      category: AchievementCategory.hidden,
+      trigger: AchievementTrigger.custom,
+      criteria: const {'key': 'obelisk_double_drop'},
+      hidden: true,
+    ),
+  ];
 }
 
 class CodexReading {

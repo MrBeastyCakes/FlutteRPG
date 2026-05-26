@@ -1304,6 +1304,7 @@ class _InventoryViewState extends State<InventoryView> with SingleTickerProvider
     final shopState = engine.shopState;
     final currentMerchant = shopState.currentMerchant;
     final listings = shopState.currentListings;
+    final rep = engine.getMerchantReputation(currentMerchant.id);
 
     // Filter listings by category
     final filteredListings = listings.where((l) {
@@ -1316,6 +1317,29 @@ class _InventoryViewState extends State<InventoryView> with SingleTickerProvider
     try {
       featuredDeal = listings.firstWhere((l) => l.isFeatured);
     } catch (_) {}
+
+    final repairWidgets = <Widget>[];
+    if (currentMerchant.id == 'maeve') {
+      engine.equippedToolSlots.forEach((skill, slot) {
+        final stamped = engine.ensureDurabilityStamped(slot);
+        if (stamped.currentDurability < stamped.maxDurability) {
+          repairWidgets.add(_buildRepairItemRow(context, engine, stamped, slotName: 'tool', skill: skill));
+        }
+      });
+    } else if (currentMerchant.id == 'hilda') {
+      if (engine.equippedWeaponSlot != null) {
+        final stamped = engine.ensureDurabilityStamped(engine.equippedWeaponSlot!);
+        if (stamped.currentDurability < stamped.maxDurability) {
+          repairWidgets.add(_buildRepairItemRow(context, engine, stamped, slotName: 'weapon'));
+        }
+      }
+      if (engine.equippedArmorSlot != null) {
+        final stamped = engine.ensureDurabilityStamped(engine.equippedArmorSlot!);
+        if (stamped.currentDurability < stamped.maxDurability) {
+          repairWidgets.add(_buildRepairItemRow(context, engine, stamped, slotName: 'armor'));
+        }
+      }
+    }
 
     return Stack(
       children: [
@@ -1516,7 +1540,7 @@ class _InventoryViewState extends State<InventoryView> with SingleTickerProvider
                               ),
                             ),
                             Text(
-                              '${featuredDeal.effectiveBuyPrice}g',
+                              '${featuredDeal.getBuyPrice(rep.tier.discountPercent)}g',
                               style: const TextStyle(
                                 color: GameTheme.accentGold,
                                 fontSize: 16,
@@ -1527,6 +1551,38 @@ class _InventoryViewState extends State<InventoryView> with SingleTickerProvider
                         ),
                       ],
                     ),
+                  ),
+                ),
+              ),
+            ],
+
+            if (repairWidgets.isNotEmpty) ...[
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: GameTheme.glassCardDecoration(),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const Row(
+                        children: [
+                          Text('🛠️', style: TextStyle(fontSize: 16)),
+                          SizedBox(width: 8),
+                          Text(
+                            'EQUIPMENT MAINTENANCE',
+                            style: TextStyle(
+                              color: GameTheme.accentGold,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 1.0,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      ...repairWidgets,
+                    ],
                   ),
                 ),
               ),
@@ -1573,7 +1629,7 @@ class _InventoryViewState extends State<InventoryView> with SingleTickerProvider
                       itemBuilder: (context, index) {
                         final listing = filteredListings[index];
                         final item = listing.item;
-                        final price = listing.effectiveBuyPrice;
+                        final price = listing.getBuyPrice(rep.tier.discountPercent);
                         final isSoldOut = listing.stock != null && listing.stock! <= 0;
 
                         return BounceTap(
@@ -1723,6 +1779,102 @@ class _InventoryViewState extends State<InventoryView> with SingleTickerProvider
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildRepairItemRow(
+    BuildContext context,
+    GameEngine engine,
+    InventorySlot slot, {
+    required String slotName,
+    SkillType? skill,
+  }) {
+    final cost = engine.calculateRepairGoldCost(slot);
+    final hasEnoughGold = engine.playerStats.gold >= cost;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E2833).withOpacity(0.5),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: GameTheme.border.withOpacity(0.3)),
+      ),
+      child: Row(
+        children: [
+          Text(slot.item.icon, style: const TextStyle(fontSize: 24)),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${slot.quality != null && slot.quality != QualityTier.standard ? "${slot.quality!.name.toUpperCase()} " : ""}${slot.item.name}',
+                  style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 4),
+                // Durability bar
+                Row(
+                  children: [
+                    Expanded(
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(4),
+                        child: LinearProgressIndicator(
+                          value: slot.maxDurability > 0 ? slot.currentDurability / slot.maxDurability : 0.0,
+                          backgroundColor: Colors.white.withOpacity(0.1),
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            slot.currentDurability == 0
+                                ? Colors.redAccent
+                                : slot.currentDurability / slot.maxDurability < 0.25
+                                    ? Colors.orangeAccent
+                                    : GameTheme.accentGold,
+                          ),
+                          minHeight: 6,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      '${slot.currentDurability}/${slot.maxDurability}',
+                      style: const TextStyle(color: GameTheme.textMuted, fontSize: 10),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 16),
+          // Cost
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                '${cost}g',
+                style: TextStyle(
+                  color: hasEnoughGold ? GameTheme.accentGold : Colors.redAccent,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                ),
+              ),
+              const SizedBox(height: 4),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: hasEnoughGold ? GameTheme.accentGold : Colors.white10,
+                  foregroundColor: hasEnoughGold ? Colors.black : Colors.white24,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                ),
+                onPressed: hasEnoughGold
+                    ? () => engine.repairWithGold(slot, slot: slotName, skill: skill)
+                    : null,
+                child: const Text('Repair', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../engine/game_engine.dart';
+import '../models/player_progression.dart';
 import '../models/skill.dart';
 import '../models/quest.dart';
 import '../models/main_quests.dart';
@@ -16,6 +17,8 @@ import '../models/crafted_item.dart';
 import 'dart:async';
 import '../widgets/bounce_tap.dart';
 import '../widgets/pulsing_dot.dart';
+import '../widgets/reagent_notice_card.dart';
+import '../models/reagent_spawn.dart';
 import '../widgets/fluid_wave_background.dart';
 import '../widgets/flying_item_overlay.dart';
 import '../widgets/coin_animation.dart';
@@ -73,8 +76,14 @@ class _DashboardViewState extends State<DashboardView> {
     final stats = engine.playerStats;
     final currentZone = engine.currentZone;
 
-    // Calculate total character level
-    int totalLevel = engine.skills.values.fold(0, (sum, skill) => sum + skill.level);
+    if (engine.tavernRequested) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (ModalRoute.of(context)?.isCurrent ?? false) {
+          engine.tavernRequested = false;
+          Navigator.pushNamed(context, '/tavern');
+        }
+      });
+    }
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(12.0),
@@ -84,7 +93,7 @@ class _DashboardViewState extends State<DashboardView> {
           _buildQuestLogChip(context, engine),
           _buildStationStatusStrip(context, engine),
           // 1. HEADER: Character Info & Stats
-          _buildHeader(stats, totalLevel),
+          _buildHeader(stats, engine),
           const SizedBox(height: 12),
 
           // 2. CURRENT LOCATION CARD
@@ -130,7 +139,12 @@ class _DashboardViewState extends State<DashboardView> {
     );
   }
 
-  Widget _buildHeader(dynamic stats, int totalLevel) {
+  Widget _buildHeader(dynamic stats, GameEngine engine) {
+    final playerLvl = stats.playerLevel;
+    final title = stats.title;
+    final nextXp = PlayerProgression.xpToNextLevel(playerLvl);
+    final xpPercent = (stats.playerXp / nextXp).clamp(0.0, 1.0);
+
     return Container(
       decoration: GameTheme.glassCardDecoration(
         customBg: const Color(0xFF1E2732).withOpacity(0.85),
@@ -139,59 +153,87 @@ class _DashboardViewState extends State<DashboardView> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          // Name & Gold
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '${stats.name}, Lvl $totalLevel ${stats.title}',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
+          // Name, Level/Title & Gold
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${stats.name}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 4),
-              GoldCounter(
-                gold: stats.gold,
-                fontSize: 12,
-                showIcon: true,
-              ),
-            ],
+                const SizedBox(height: 2),
+                Text(
+                  'Lvl $playerLvl $title',
+                  style: const TextStyle(
+                    color: GameTheme.accentGold,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                GoldCounter(
+                  gold: stats.gold,
+                  fontSize: 12,
+                  showIcon: true,
+                ),
+              ],
+            ),
           ),
-          // Health & Energy bars
+          const SizedBox(width: 8),
+          // Health, Energy & Player XP bars
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               // Health
               Row(
                 children: [
-                  const Icon(Icons.favorite, color: GameTheme.healthRed, size: 16),
+                  const Icon(Icons.favorite, color: GameTheme.healthRed, size: 14),
                   const SizedBox(width: 6),
                   SizedBox(
-                    width: 110,
+                    width: 120,
                     child: CustomProgressBar(
                       progress: stats.currentHealth / stats.maxHealth,
                       color: GameTheme.healthRed,
-                      height: 12,
-                      label: 'Health: ${stats.currentHealth}/${stats.maxHealth}',
+                      height: 10,
+                      label: 'HP: ${stats.currentHealth}/${stats.maxHealth}',
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 6),
+              const SizedBox(height: 4),
               // Energy
               Row(
                 children: [
-                  const Icon(Icons.bolt, color: GameTheme.energyYellow, size: 16),
+                  const Icon(Icons.bolt, color: GameTheme.energyYellow, size: 14),
                   const SizedBox(width: 6),
                   SizedBox(
-                    width: 110,
+                    width: 120,
                     child: CustomProgressBar(
                       progress: stats.currentEnergy / stats.maxEnergy,
                       color: GameTheme.energyBlue,
-                      height: 12,
+                      height: 10,
                       label: 'Energy: ${stats.currentEnergy}/${stats.maxEnergy}',
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              // Player XP
+              Row(
+                children: [
+                  const Icon(Icons.star, color: Colors.purpleAccent, size: 14),
+                  const SizedBox(width: 6),
+                  SizedBox(
+                    width: 120,
+                    child: GameProgressBar(
+                      progress: xpPercent,
+                      color: Colors.purpleAccent,
+                      label: 'XP: ${stats.playerXp}/$nextXp',
                     ),
                   ),
                 ],
@@ -1115,6 +1157,8 @@ class _DashboardViewState extends State<DashboardView> {
       ));
     }
 
+    final uncollectedSpawns = engine.getUncollectedSpawnsForZone(zone.id);
+
     return Container(
       decoration: GameTheme.glassCardDecoration(),
       padding: const EdgeInsets.all(12),
@@ -1131,6 +1175,8 @@ class _DashboardViewState extends State<DashboardView> {
             ),
           ),
           const SizedBox(height: 8),
+          if (uncollectedSpawns.isNotEmpty)
+            ...uncollectedSpawns.map((spawn) => ReagentNoticeCard(spawn: spawn, engine: engine)),
           ...actionsList.map((action) {
             final isRunningThis = activeActionState?.action?.id == action.id;
             final runningState = isRunningThis ? activeActionState : null;
@@ -2297,6 +2343,29 @@ class _DashboardViewState extends State<DashboardView> {
           ),
         ],
       ),
+    );
+  }
+}
+
+class GameProgressBar extends StatelessWidget {
+  final double progress;
+  final Color color;
+  final String label;
+
+  const GameProgressBar({
+    Key? key,
+    required this.progress,
+    required this.color,
+    required this.label,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomProgressBar(
+      progress: progress,
+      color: color,
+      label: label,
+      height: 10,
     );
   }
 }

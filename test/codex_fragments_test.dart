@@ -3,8 +3,8 @@ import 'package:flutter_text_based_rpg/models/codex.dart';
 
 void main() {
   group('CodexFragments data invariants', () {
-    test('Exactly 50 fragments exist', () {
-      expect(CodexFragments.all.length, 50);
+    test('Exactly 56 fragments exist', () {
+      expect(CodexFragments.all.length, 56);
     });
 
     test('Each tag has exactly 10 fragments', () {
@@ -22,14 +22,14 @@ void main() {
 
     test('Every fragment has a unique id', () {
       final ids = CodexFragments.all.map((f) => f.id).toSet();
-      expect(ids.length, 50);
+      expect(ids.length, 56);
     });
 
     test('Every (tag, orderInTag) pair is unique', () {
       final pairs = CodexFragments.all
           .map((f) => '${f.tag.name}_${f.orderInTag}')
           .toSet();
-      expect(pairs.length, 50);
+      expect(pairs.length, 56);
     });
 
     test('Each tag has orderInTag values 1 through 10', () {

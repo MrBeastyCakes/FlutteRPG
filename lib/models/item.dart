@@ -7,6 +7,7 @@ enum ItemType {
   weapon,
   armor,
   blueprint,
+  brew,
 }
 
 
@@ -47,7 +48,7 @@ class Item {
     this.defense = 0,
   });
 
-  bool get isFood => type == ItemType.food;
+  bool get isFood => type == ItemType.food || type == ItemType.brew;
   bool get isTool => type == ItemType.tool;
   bool get isWeapon => type == ItemType.weapon;
   bool get isArmor => type == ItemType.armor;
@@ -443,7 +444,7 @@ class Items {
     name: 'Elixir of Life I',
     description: 'A basic healing potion brewed with forest wildflowers.',
     icon: '🧪',
-    type: ItemType.food,
+    type: ItemType.brew,
     value: 15,
     healAmount: 25,
     energyAmount: 0,
@@ -454,7 +455,7 @@ class Items {
     name: 'Elixir of Life II',
     description: 'An advanced healing potion stabilized with river clay.',
     icon: '🧪',
-    type: ItemType.food,
+    type: ItemType.brew,
     value: 30,
     healAmount: 50,
     energyAmount: 0,
@@ -465,7 +466,7 @@ class Items {
     name: 'Elixir of Life III',
     description: 'A powerful healing potion infused with nightshade extract.',
     icon: '🧪',
-    type: ItemType.food,
+    type: ItemType.brew,
     value: 60,
     healAmount: 80,
     energyAmount: 0,
@@ -691,7 +692,7 @@ class Items {
     name: "Alchemist's Elixir IV",
     description: 'A supreme elixir that restores immense health and energy.',
     icon: '🧪',
-    type: ItemType.food,
+    type: ItemType.brew,
     value: 200,
     healAmount: 120,
     energyAmount: 120,
@@ -999,6 +1000,93 @@ class Items {
     value: 0,
   );
 
+  // ─── Reagents (Spec 6a) ───
+  static const Item moonpetal = Item(
+    id: 'moonpetal',
+    name: 'Moonpetal',
+    description: 'A bone-white blossom that glows faintly in moonlight. Forces an affix roll on a craft.',
+    icon: '🌸',
+    type: ItemType.resource,
+    value: 60,
+  );
+
+  static const Item spiritSap = Item(
+    id: 'spirit_sap',
+    name: 'Spirit Sap',
+    description: 'Translucent sap that doubles back on itself. Doubles the output of a craft.',
+    icon: '💧',
+    type: ItemType.resource,
+    value: 70,
+  );
+
+  static const Item hollowBone = Item(
+    id: 'hollow_bone',
+    name: 'Hollow Bone',
+    description: 'A weightless bone from a creature no one remembers. Grants Brutal affix to a weapon.',
+    icon: '🦴',
+    type: ItemType.resource,
+    value: 80,
+  );
+
+  static const Item seaTear = Item(
+    id: 'sea_tear',
+    name: 'Sea-Tear',
+    description: 'A crystallized drop of cold sea-water. Grants Tempered affix to armor.',
+    icon: '🌀',
+    type: ItemType.resource,
+    value: 80,
+  );
+
+  static const Item coalblood = Item(
+    id: 'coalblood',
+    name: 'Coalblood',
+    description: 'A viscous black liquid that smells of forge-smoke. Grants Frugal affix to any craft.',
+    icon: '🌑',
+    type: ItemType.resource,
+    value: 90,
+  );
+
+  static const Item wispLight = Item(
+    id: 'wisp_light',
+    name: 'Wisp-Light',
+    description: 'A flickering mote captured at twilight. Guarantees Masterwork quality on a craft.',
+    icon: '✨',
+    type: ItemType.resource,
+    value: 200,
+  );
+
+  // ─── Bram-tier merchant items (Spec 6a) ───
+  static const Item tinkersBauble = Item(
+    id: 'tinkers_bauble',
+    name: "Tinker's Bauble",
+    description: "A small clockwork trinket from Cedric's private stock. Used as a crafting modifier — adds +1 to result quantity.",
+    icon: '⚙️',
+    type: ItemType.resource,
+    value: 100,
+  );
+
+  static const Item elixirOfTwilight = Item(
+    id: 'elixir_of_twilight',
+    name: 'Elixir of Twilight',
+    description: "Pippin's signature concoction. Restores 30 HP and 50 energy.",
+    icon: '🧪',
+    type: ItemType.brew,
+    value: 120,
+    healAmount: 30,
+    energyAmount: 50,
+  );
+
+  static const Item tavernsBest = Item(
+    id: 'taverns_best',
+    name: "Tavern's Best",
+    description: "Bram's reserve drink. Doesn't restore much, but lifts the spirits. Grants +10% craft speed for 5 actions.",
+    icon: '🍺',
+    type: ItemType.brew,
+    value: 60,
+    healAmount: 10,
+    energyAmount: 30,
+  );
+
   static const List<Item> all = [
     heartwood,
     oakLog,
@@ -1091,6 +1179,15 @@ class Items {
     wildsCleansingToken,
     stoneCleansingToken,
     tideCleansingToken,
+    moonpetal,
+    spiritSap,
+    hollowBone,
+    seaTear,
+    coalblood,
+    wispLight,
+    tinkersBauble,
+    elixirOfTwilight,
+    tavernsBest,
   ];
 
   static Item? findById(String id) {

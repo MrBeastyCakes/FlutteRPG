@@ -12,6 +12,7 @@ import '../widgets/reading_overlay.dart';
 import '../widgets/pulsing_weather_chip.dart';
 import '../models/weather.dart';
 import 'codex_puzzle_view.dart';
+import '../models/shop.dart';
 
 
 class CodexView extends StatelessWidget {
@@ -22,7 +23,7 @@ class CodexView extends StatelessWidget {
     final engine = Provider.of<GameEngine>(context);
     
     final showFragments = engine.knownCodexFragmentIds.isNotEmpty;
-    final showAchievements = engine.earnedAchievementIds.isNotEmpty;
+    final showReputation = engine.merchantRep.values.any((r) => r.totalReputation > 0);
 
     final List<Tab> tabs = [];
     final List<Widget> tabViews = [];
@@ -41,10 +42,13 @@ class CodexView extends StatelessWidget {
       tabViews.add(_buildFragmentsTab(context, engine));
     }
 
-    if (showAchievements) {
-      tabs.add(const Tab(text: 'ACHIEVEMENTS'));
-      tabViews.add(_buildAchievementsTab(context, engine));
+    if (showReputation) {
+      tabs.add(const Tab(text: 'REPUTATION'));
+      tabViews.add(_buildReputationTab(context, engine));
     }
+
+    tabs.add(const Tab(text: 'ACHIEVEMENTS'));
+    tabViews.add(_buildAchievementsTab(context, engine));
 
     return DefaultTabController(
       length: tabs.length,
@@ -559,6 +563,10 @@ class CodexView extends StatelessWidget {
   void _showBeastStatsModal(BuildContext context, GameEngine engine, Beast beast) {
     final entry = engine.bestiary[beast.id];
     final defeatCount = entry?.defeatCount ?? 0;
+    final hasWeaknessUnlocked = beast.weaknessHint != null &&
+        Achievements.all.any((ach) =>
+            ach.bestiaryHintBeastId == beast.id &&
+            engine.earnedAchievementIds.contains(ach.id));
 
     showDialog(
       context: context,
@@ -594,6 +602,8 @@ class CodexView extends StatelessWidget {
                 _buildBeastStatRow('⚔️ Attack Power', '${beast.attackPower}'),
                 _buildBeastStatRow('🛡️ Defense', '${beast.defense}'),
                 _buildBeastStatRow('⭐ XP Granted', '${beast.xpReward} Combat XP'),
+                if (hasWeaknessUnlocked)
+                  _buildBeastStatRow('🎯 Weak to', beast.weaknessHint!),
                 
                 if (defeatCount >= 3) ...[
                   const Divider(color: GameTheme.border, height: 20),
@@ -1067,12 +1077,336 @@ class CodexView extends StatelessWidget {
     );
   }
 
+  Widget _buildReputationTab(BuildContext context, GameEngine engine) {
+    final merchants = Merchant.all;
+
+    return ListView.builder(
+      padding: const EdgeInsets.all(12),
+      itemCount: merchants.length,
+      itemBuilder: (context, index) {
+        final merchant = merchants[index];
+        final rep = engine.getMerchantReputation(merchant.id);
+        final tier = rep.tier;
+
+        Color tierColor;
+        switch (tier) {
+          case ReputationTier.stranger:
+            tierColor = Colors.grey;
+            break;
+          case ReputationTier.familiar:
+            tierColor = const Color(0xFF80DEEA); // Light teal
+            break;
+          case ReputationTier.trustedPatron:
+            tierColor = const Color(0xFF64B5F6); // Blue
+            break;
+          case ReputationTier.honoredFriend:
+            tierColor = GameTheme.accentGold; // Gold
+            break;
+          case ReputationTier.swornCompanion:
+            tierColor = const Color(0xFFBA68C8); // Purple
+            break;
+        }
+
+        final bool isMax = tier == ReputationTier.swornCompanion;
+        final nextTierMin = isMax ? 500 : ReputationTier.values[tier.index + 1].requiredReputation;
+        final progressText = isMax ? 'MAX' : '${rep.totalReputation} / $nextTierMin rep';
+
+        final bool canClaimGift = tier.index >= ReputationTier.honoredFriend.index && !engine.isGiftClaimed(merchant.id);
+
+        return Card(
+          color: GameTheme.cardBg,
+          margin: const EdgeInsets.only(bottom: 12),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+            side: BorderSide(
+              color: canClaimGift ? GameTheme.accentGold : GameTheme.border.withOpacity(0.5),
+              width: canClaimGift ? 1.5 : 1,
+            ),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      merchant.icon,
+                      style: const TextStyle(fontSize: 28),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            merchant.name,
+                            style: const TextStyle(
+                              color: GameTheme.textLight,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                            ),
+                          ),
+                          Text(
+                            merchant.title,
+                            style: const TextStyle(
+                              color: GameTheme.textMuted,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: tierColor.withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: tierColor.withOpacity(0.4), width: 1),
+                      ),
+                      child: Text(
+                        tier.name.toUpperCase(),
+                        style: TextStyle(
+                          color: tierColor,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1.0,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Discount: ${(tier.discountPercent * 100).toInt()}%',
+                      style: const TextStyle(
+                        color: GameTheme.textLight,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    Text(
+                      progressText,
+                      style: const TextStyle(
+                        color: GameTheme.textMuted,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: LinearProgressIndicator(
+                    value: rep.progressToNextTier,
+                    backgroundColor: GameTheme.border,
+                    valueColor: AlwaysStoppedAnimation<Color>(tierColor),
+                    minHeight: 6,
+                  ),
+                ),
+                if (canClaimGift) ...[
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: () {
+                        engine.claimHonoredFriendGift(merchant.id);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            backgroundColor: const Color(0xFF131920),
+                            content: Text(
+                              'Claimed Honored Friend gift from ${merchant.name}!',
+                              style: const TextStyle(color: GameTheme.accentGold, fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.card_giftcard, size: 16),
+                      label: const Text(
+                        'Claim Honored Gift',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: GameTheme.accentGold,
+                        foregroundColor: const Color(0xFF10171E),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  String _categoryName(AchievementCategory category) {
+    switch (category) {
+      case AchievementCategory.firstSteps: return 'First Steps';
+      case AchievementCategory.mastery: return 'Mastery';
+      case AchievementCategory.combat: return 'Combat';
+      case AchievementCategory.crafting: return 'Crafting & Cooking';
+      case AchievementCategory.lore: return 'Lore & History';
+      case AchievementCategory.economy: return 'Wealth & Economy';
+      case AchievementCategory.hidden: return 'Secrets';
+    }
+  }
+
   Widget _buildAchievementsTab(BuildContext context, GameEngine engine) {
-    return const Center(
-      child: Text(
-        'Achievements Tab (Under Construction)',
-        style: TextStyle(color: GameTheme.textMuted),
+    final earned = engine.earnedAchievementIds;
+    final categories = AchievementCategory.values;
+
+    final List<Widget> children = [];
+
+    final totalVisible = Achievements.all.where((a) => !a.hidden).length;
+    final totalEarned = earned.length;
+    final totalEarnedVisible = Achievements.all.where((a) => !a.hidden && earned.contains(a.id)).length;
+
+    children.add(
+      Container(
+        padding: const EdgeInsets.all(16),
+        margin: const EdgeInsets.only(bottom: 12),
+        decoration: BoxDecoration(
+          color: const Color(0xFF0C1014),
+          border: Border(bottom: BorderSide(color: GameTheme.border.withOpacity(0.5))),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'COMPLETION',
+                  style: TextStyle(
+                    color: GameTheme.accentGold,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1.5,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '$totalEarned earned ($totalEarnedVisible visible / $totalVisible total)',
+                  style: const TextStyle(color: GameTheme.textLight, fontSize: 13, fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: GameTheme.accentGold.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: GameTheme.accentGold.withOpacity(0.4)),
+              ),
+              child: Text(
+                '${((totalEarned / 40.0) * 100).toInt()}%',
+                style: const TextStyle(
+                  color: GameTheme.accentGold,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
+    );
+
+    for (final category in categories) {
+      final categoryAchievements = Achievements.all.where((ach) {
+        if (ach.category != category) return false;
+        if (earned.contains(ach.id)) return true;
+        return !ach.hidden;
+      }).toList();
+
+      if (categoryAchievements.isEmpty) continue;
+
+      children.add(
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
+          child: Text(
+            _categoryName(category).toUpperCase(),
+            style: const TextStyle(
+              color: GameTheme.accentGold,
+              fontWeight: FontWeight.bold,
+              fontSize: 13,
+              letterSpacing: 1.2,
+            ),
+          ),
+        ),
+      );
+
+      children.addAll(
+        categoryAchievements.map((ach) {
+          final isEarned = earned.contains(ach.id);
+
+          return Card(
+            color: isEarned ? GameTheme.cardBg : GameTheme.cardBg.withOpacity(0.5),
+            margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: BorderSide(
+                color: isEarned
+                    ? GameTheme.accentGold.withOpacity(0.4)
+                    : GameTheme.border.withOpacity(0.2),
+                width: isEarned ? 1.5 : 1.0,
+              ),
+            ),
+            child: ListTile(
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              leading: Container(
+                width: 40,
+                height: 40,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: isEarned ? GameTheme.accentGold.withOpacity(0.1) : Colors.black.withOpacity(0.25),
+                  shape: BoxShape.circle,
+                ),
+                child: Text(
+                  isEarned ? ach.icon : '❔',
+                  style: const TextStyle(fontSize: 24),
+                ),
+              ),
+              title: Text(
+                isEarned ? ach.name : '❔ ???',
+                style: TextStyle(
+                  color: isEarned ? GameTheme.textLight : GameTheme.textMuted,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                ),
+              ),
+              subtitle: Padding(
+                padding: const EdgeInsets.only(top: 4.0),
+                child: Text(
+                  ach.description,
+                  style: TextStyle(
+                    color: isEarned ? GameTheme.textLight.withOpacity(0.7) : GameTheme.textMuted.withOpacity(0.8),
+                    fontSize: 11,
+                    fontStyle: isEarned ? FontStyle.normal : FontStyle.italic,
+                  ),
+                ),
+              ),
+              trailing: isEarned
+                  ? const Icon(Icons.check_circle, color: GameTheme.accentGold, size: 20)
+                  : const Icon(Icons.lock_outline, color: GameTheme.textMuted, size: 18),
+            ),
+          );
+        }),
+      );
+
+      children.add(const SizedBox(height: 16));
+    }
+
+    return ListView(
+      children: children,
     );
   }
 }

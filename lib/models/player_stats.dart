@@ -6,6 +6,8 @@ class PlayerStats {
   final int currentEnergy;
   final int maxEnergy;
   final int gold;
+  final int playerLevel; // Spec 6b
+  final int playerXp;    // Spec 6b
 
   const PlayerStats({
     required this.name,
@@ -15,6 +17,8 @@ class PlayerStats {
     required this.currentEnergy,
     required this.maxEnergy,
     required this.gold,
+    required this.playerLevel,
+    required this.playerXp,
   });
 
   bool get isDead => currentHealth <= 0;
@@ -28,6 +32,8 @@ class PlayerStats {
     int? currentEnergy,
     int? maxEnergy,
     int? gold,
+    int? playerLevel,
+    int? playerXp,
   }) {
     return PlayerStats(
       name: name ?? this.name,
@@ -37,6 +43,8 @@ class PlayerStats {
       currentEnergy: currentEnergy ?? this.currentEnergy,
       maxEnergy: maxEnergy ?? this.maxEnergy,
       gold: gold ?? this.gold,
+      playerLevel: playerLevel ?? this.playerLevel,
+      playerXp: playerXp ?? this.playerXp,
     );
   }
 
@@ -49,6 +57,8 @@ class PlayerStats {
       currentEnergy: 100,
       maxEnergy: 100,
       gold: 10, // starting gold
+      playerLevel: 1,
+      playerXp: 0,
     );
   }
 }

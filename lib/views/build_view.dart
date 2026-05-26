@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../engine/game_engine.dart';
 import '../models/skill.dart';
 import '../models/structure.dart';
+import '../models/inventory.dart';
 import '../models/item.dart';
 import '../models/recipe.dart';
 import '../models/crafted_item.dart';
@@ -349,7 +350,7 @@ class _BuildViewState extends State<BuildView> {
         if (_selectedCategory == 'Tools' && r.resultItem?.type != ItemType.tool) return false;
         if (_selectedCategory == 'Weapons' && r.resultItem?.type != ItemType.weapon) return false;
         if (_selectedCategory == 'Armor' && r.resultItem?.type != ItemType.armor) return false;
-        if (_selectedCategory == 'Food/Potions' && r.resultItem?.type != ItemType.food) return false;
+        if (_selectedCategory == 'Food/Potions' && r.resultItem?.isFood != true) return false;
         if (_selectedCategory == 'Ingots' && !r.resultItemId.contains('ingot')) return false;
         if (_selectedCategory == 'Leather/Silk' && !r.resultItemId.contains('leather') && !r.resultItemId.contains('silk')) return false;
         if (_selectedCategory == 'Glyphs' && !r.resultItemId.contains('glyph')) return false;
@@ -388,6 +389,31 @@ class _BuildViewState extends State<BuildView> {
 
     final double activeStationQualityBias = engine.getStationQualityBias(selectedInstance.tier);
 
+    final List<Widget> materialRepairWidgets = [];
+    if (_selectedStationId == 'crafting_bench') {
+      // Check tools
+      engine.equippedToolSlots.forEach((skill, slot) {
+        final stamped = engine.ensureDurabilityStamped(slot);
+        if (stamped.currentDurability < stamped.maxDurability) {
+          materialRepairWidgets.add(_buildMaterialRepairItemRow(context, engine, stamped, slotName: 'tool', skill: skill));
+        }
+      });
+      // Check weapon
+      if (engine.equippedWeaponSlot != null) {
+        final stamped = engine.ensureDurabilityStamped(engine.equippedWeaponSlot!);
+        if (stamped.currentDurability < stamped.maxDurability) {
+          materialRepairWidgets.add(_buildMaterialRepairItemRow(context, engine, stamped, slotName: 'weapon'));
+        }
+      }
+      // Check armor
+      if (engine.equippedArmorSlot != null) {
+        final stamped = engine.ensureDurabilityStamped(engine.equippedArmorSlot!);
+        if (stamped.currentDurability < stamped.maxDurability) {
+          materialRepairWidgets.add(_buildMaterialRepairItemRow(context, engine, stamped, slotName: 'armor'));
+        }
+      }
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -415,6 +441,37 @@ class _BuildViewState extends State<BuildView> {
 
         // Search & Filters Panel
         _buildSearchAndFiltersPanel(categories),
+
+        if (materialRepairWidgets.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: GameTheme.glassCardDecoration(),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const Row(
+                    children: [
+                      Text('🛠️', style: TextStyle(fontSize: 16)),
+                      SizedBox(width: 8),
+                      Text(
+                        'EQUIPMENT MAINTENANCE (BENCH REPAIRS)',
+                        style: TextStyle(
+                          color: GameTheme.craftingCyan,
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1.0,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  ...materialRepairWidgets,
+                ],
+              ),
+            ),
+          ),
 
         // Recipe PageView grid
         Expanded(
@@ -495,6 +552,124 @@ class _BuildViewState extends State<BuildView> {
             ),
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildMaterialRepairItemRow(
+    BuildContext context,
+    GameEngine engine,
+    InventorySlot slot, {
+    required String slotName,
+    SkillType? skill,
+  }) {
+    final cost = engine.calculateRepairCost(slot);
+    final canRepair = engine.canRepairWithMaterials(slot);
+
+    final costSpans = <TextSpan>[];
+    int idx = 0;
+    cost.forEach((itemId, qtyNeeded) {
+      final item = Items.findById(itemId);
+      if (item != null) {
+        final count = engine.inventory.getItemCount(itemId);
+        final hasEnough = count >= qtyNeeded;
+        if (idx > 0) {
+          costSpans.add(const TextSpan(text: ', ', style: TextStyle(color: Colors.white70)));
+        }
+        costSpans.add(TextSpan(
+          text: '${item.icon} ${item.name} ($count/$qtyNeeded)',
+          style: TextStyle(
+            color: hasEnough ? GameTheme.craftingCyan : Colors.redAccent,
+            fontWeight: FontWeight.bold,
+          ),
+        ));
+        idx++;
+      }
+    });
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E2833).withOpacity(0.5),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: GameTheme.border.withOpacity(0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Text(slot.item.icon, style: const TextStyle(fontSize: 24)),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${slot.quality != null && slot.quality != QualityTier.standard ? "${slot.quality!.name.toUpperCase()} " : ""}${slot.item.name}',
+                      style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(4),
+                            child: LinearProgressIndicator(
+                              value: slot.maxDurability > 0 ? slot.currentDurability / slot.maxDurability : 0.0,
+                              backgroundColor: Colors.white.withOpacity(0.1),
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                slot.currentDurability == 0
+                                    ? Colors.redAccent
+                                    : slot.currentDurability / slot.maxDurability < 0.25
+                                        ? Colors.orangeAccent
+                                        : GameTheme.craftingCyan,
+                              ),
+                              minHeight: 6,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          '${slot.currentDurability}/${slot.maxDurability}',
+                          style: const TextStyle(color: GameTheme.textMuted, fontSize: 10),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 16),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: canRepair ? GameTheme.craftingCyan : Colors.white10,
+                  foregroundColor: canRepair ? Colors.black : Colors.white24,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                ),
+                onPressed: canRepair
+                    ? () => engine.repairWithMaterials(slot, slot: slotName, skill: skill)
+                    : null,
+                child: const Text('Repair', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+          if (costSpans.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            RichText(
+              text: TextSpan(
+                style: const TextStyle(fontSize: 11, color: Colors.white70),
+                children: [
+                  const TextSpan(text: 'Requires: '),
+                  ...costSpans,
+                ],
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }
@@ -1196,6 +1371,12 @@ class _BuildViewState extends State<BuildView> {
               Items.wildBerries, // Standard Floor
               Items.trollClaw,   // Fine Floor
               Items.boarTusk,    // Extra qty
+              Items.moonpetal,   // Forces affix roll
+              Items.spiritSap,   // Doubles craft output
+              Items.hollowBone,  // Grants Brutal weapon affix
+              Items.seaTear,     // Grants Tempered armor affix
+              Items.coalblood,   // Grants Frugal affix
+              Items.wispLight,   // Guarantees Masterwork quality
             ];
             for (var m in modifierCandidates) {
               if (engine.inventory.getItemCount(m.id) > 0) {
@@ -1371,9 +1552,45 @@ class _BuildViewState extends State<BuildView> {
                         hint: const Text('Select a modifier item (none)', style: TextStyle(color: GameTheme.textMuted, fontSize: 12)),
                         style: const TextStyle(color: Colors.white, fontSize: 12),
                         onChanged: (newVal) {
-                          setModalState(() {
-                            selectedModifierItemId = newVal;
-                          });
+                          if (newVal == 'hollow_bone' && recipe.resultItem?.type != ItemType.weapon) {
+                            _showModifierWarningDialog(
+                              context,
+                              'Hollow Bone',
+                              'weapons',
+                              recipe.resultItem?.name ?? 'this item',
+                              () {
+                                setModalState(() {
+                                  selectedModifierItemId = newVal;
+                                });
+                              },
+                              () {
+                                setModalState(() {
+                                  selectedModifierItemId = null;
+                                });
+                              },
+                            );
+                          } else if (newVal == 'sea_tear' && recipe.resultItem?.type != ItemType.armor) {
+                            _showModifierWarningDialog(
+                              context,
+                              'Sea-Tear',
+                              'armor',
+                              recipe.resultItem?.name ?? 'this item',
+                              () {
+                                setModalState(() {
+                                  selectedModifierItemId = newVal;
+                                });
+                              },
+                              () {
+                                setModalState(() {
+                                  selectedModifierItemId = null;
+                                });
+                              },
+                            );
+                          } else {
+                            setModalState(() {
+                              selectedModifierItemId = newVal;
+                            });
+                          }
                         },
                         items: [
                           const DropdownMenuItem<String?>(
@@ -1390,6 +1607,12 @@ class _BuildViewState extends State<BuildView> {
                             if (m.id == 'wild_berries') effectDesc = 'Standard Quality Floor';
                             if (m.id == 'troll_claw') effectDesc = 'Fine Quality Floor';
                             if (m.id == 'boar_tusk') effectDesc = '+1 Output Qty';
+                            if (m.id == 'moonpetal') effectDesc = 'Force Affix (Moonpetal)';
+                            if (m.id == 'spirit_sap') effectDesc = 'Double Output (Spirit Sap)';
+                            if (m.id == 'hollow_bone') effectDesc = 'Brutal Weapon Affix (Hollow Bone)';
+                            if (m.id == 'sea_tear') effectDesc = 'Tempered Armor Affix (Sea-Tear)';
+                            if (m.id == 'coalblood') effectDesc = 'Frugal Affix (Coalblood)';
+                            if (m.id == 'wisp_light') effectDesc = 'Guaranteed Masterwork (Wisp-Light)';
 
                             return DropdownMenuItem<String?>(
                               value: m.id,
@@ -2326,5 +2549,61 @@ class _BuildViewState extends State<BuildView> {
     if (tier == 2) return 'II';
     if (tier == 3) return 'III';
     return '$tier';
+  }
+
+  void _showModifierWarningDialog(
+    BuildContext context,
+    String modifierName,
+    String requiredType,
+    String actualName,
+    VoidCallback onConfirm,
+    VoidCallback onCancel,
+  ) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: GameTheme.cardBg,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+            side: const BorderSide(color: GameTheme.border, width: 1.5),
+          ),
+          title: Row(
+            children: const [
+              Text('⚠️ ', style: TextStyle(fontSize: 20)),
+              Text(
+                'Modifier Mismatch',
+                style: TextStyle(color: GameTheme.accentGold, fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+          content: Text(
+            'The $modifierName modifier is designed for $requiredType, but you are crafting $actualName. The modifier\'s special effect will not apply to this craft.\n\nDo you want to use it anyway?',
+            style: const TextStyle(color: Colors.white70, fontSize: 13, height: 1.4),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                onCancel();
+              },
+              child: const Text('Cancel', style: TextStyle(color: GameTheme.textMuted)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: GameTheme.accentGold,
+                foregroundColor: Colors.black,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              onPressed: () {
+                Navigator.of(context).pop();
+                onConfirm();
+              },
+              child: const Text('Use Anyway', style: TextStyle(fontWeight: FontWeight.bold)),
+            ),
+          ],
+        );
+      },
+    );
   }
 }

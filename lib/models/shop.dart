@@ -33,10 +33,14 @@ class ShopListing {
     this.discountPercent = 0,
   });
 
-  int get effectiveBuyPrice {
-    if (discountPercent <= 0) return buyPrice;
-    final discounted = buyPrice * (100 - discountPercent) / 100;
+  int getBuyPrice(double reputationDiscountPercent) {
+    final totalDiscount = (discountPercent / 100.0) + reputationDiscountPercent;
+    final discounted = buyPrice * (1.0 - totalDiscount);
     return max(1, discounted.toInt());
+  }
+
+  int get effectiveBuyPrice {
+    return getBuyPrice(0.0);
   }
 
   ShopListing copyWith({
@@ -241,7 +245,119 @@ class Merchant {
     ],
   );
 
-  static final List<Merchant> all = [cedric, hilda, pippin, silas, maeve];
+  // Tavern-Keeper Bram (🍺)
+  static final Merchant bram = Merchant(
+    id: 'bram',
+    name: 'Bram',
+    title: 'Tavern-Keeper',
+    icon: '🍺',
+    greetings: [
+      'Welcome to the Boar & Hearth! Grab a drink, rest your feet.',
+      'Gold is always good, but gossip is better. What are you buying?',
+      'Best brew in the valley, brewed it myself! Take a look.',
+      'A warm fire and a cold drink, what more does a traveler need?',
+    ],
+    baseListings: [
+      ShopListing(item: Items.wildBerries, buyPrice: 3, sellPrice: 1, category: ShopCategory.provisions),
+      ShopListing(item: Items.bakedPotato, buyPrice: 11, sellPrice: 4, stock: 10, maxStock: 10, category: ShopCategory.provisions),
+      ShopListing(item: Items.tavernsBest, buyPrice: 20, sellPrice: 5, category: ShopCategory.provisions),
+      // Trusted Patron items:
+      ShopListing(item: Items.elixirOfTwilight, buyPrice: 45, sellPrice: 15, stock: 2, maxStock: 2, category: ShopCategory.provisions),
+      ShopListing(item: Items.tinkersBauble, buyPrice: 150, sellPrice: 50, stock: 1, maxStock: 1, category: ShopCategory.tools),
+    ],
+  );
+
+  static final List<Merchant> all = [cedric, hilda, pippin, silas, maeve, bram];
+}
+
+enum ReputationTier {
+  stranger,
+  familiar,
+  trustedPatron,
+  honoredFriend,
+  swornCompanion,
+}
+
+extension ReputationTierExtension on ReputationTier {
+  String get name {
+    switch (this) {
+      case ReputationTier.stranger: return 'Stranger';
+      case ReputationTier.familiar: return 'Familiar';
+      case ReputationTier.trustedPatron: return 'Trusted Patron';
+      case ReputationTier.honoredFriend: return 'Honored Friend';
+      case ReputationTier.swornCompanion: return 'Sworn Companion';
+    }
+  }
+
+  int get requiredReputation {
+    switch (this) {
+      case ReputationTier.stranger: return 0;
+      case ReputationTier.familiar: return 50;
+      case ReputationTier.trustedPatron: return 150;
+      case ReputationTier.honoredFriend: return 300;
+      case ReputationTier.swornCompanion: return 500;
+    }
+  }
+
+  double get discountPercent {
+    switch (this) {
+      case ReputationTier.stranger: return 0.0;
+      case ReputationTier.familiar: return 0.0;
+      case ReputationTier.trustedPatron: return 0.10;
+      case ReputationTier.honoredFriend: return 0.20;
+      case ReputationTier.swornCompanion: return 0.30;
+    }
+  }
+}
+
+class MerchantReputation {
+  final String merchantId;
+  final int totalReputation;
+  final int sessionReputation; // Capped at 200/session/merchant
+
+  const MerchantReputation({
+    required this.merchantId,
+    this.totalReputation = 0,
+    this.sessionReputation = 0,
+  });
+
+  ReputationTier get tier {
+    if (totalReputation >= 500) return ReputationTier.swornCompanion;
+    if (totalReputation >= 300) return ReputationTier.honoredFriend;
+    if (totalReputation >= 150) return ReputationTier.trustedPatron;
+    if (totalReputation >= 50) return ReputationTier.familiar;
+    return ReputationTier.stranger;
+  }
+
+  int get repToNextTier {
+    final t = tier;
+    if (t == ReputationTier.swornCompanion) return 0;
+    final next = ReputationTier.values[t.index + 1];
+    return next.requiredReputation - totalReputation;
+  }
+
+  double get progressToNextTier {
+    final t = tier;
+    if (t == ReputationTier.swornCompanion) return 1.0;
+    final currentMin = t.requiredReputation;
+    final next = ReputationTier.values[t.index + 1];
+    final nextMin = next.requiredReputation;
+    final range = nextMin - currentMin;
+    if (range <= 0) return 1.0;
+    return ((totalReputation - currentMin) / range).clamp(0.0, 1.0);
+  }
+
+  MerchantReputation copyWith({
+    String? merchantId,
+    int? totalReputation,
+    int? sessionReputation,
+  }) {
+    return MerchantReputation(
+      merchantId: merchantId ?? this.merchantId,
+      totalReputation: totalReputation ?? this.totalReputation,
+      sessionReputation: sessionReputation ?? this.sessionReputation,
+    );
+  }
 }
 
 class ShopState {

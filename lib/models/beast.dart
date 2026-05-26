@@ -59,6 +59,7 @@ class Beast {
   final List<LootDrop> lootTable;
   final BeastAbility? ability; // NEW
   final List<EchoPhase>? phases; // NEW
+  final String? weaknessHint; // Spec 6b
 
   const Beast({
     required this.id,
@@ -71,6 +72,7 @@ class Beast {
     required this.lootTable,
     this.ability, // NEW
     this.phases, // NEW
+    this.weaknessHint,
   });
 }
 
@@ -94,6 +96,7 @@ class Beasts {
       telegraphText: 'The boar paws the dirt, lowering its tusks.',
       effect: BeastSpecialEffect.bigHit,
     ),
+    weaknessHint: 'Heavy Strike during charge windows',
   );
 
   static const Beast caveSpider = Beast(
@@ -115,6 +118,7 @@ class Beasts {
       telegraphText: 'Web-glands glisten.',
       effect: BeastSpecialEffect.stun,
     ),
+    weaknessHint: 'Strike between web-bursts',
   );
 
   static const Beast shadowWolf = Beast(
@@ -136,6 +140,7 @@ class Beasts {
       telegraphText: "The wolf's eyes flash silver.",
       effect: BeastSpecialEffect.summonAlly,
     ),
+    weaknessHint: 'Defend on howl, then Strike',
   );
 
   static const Beast cavernTroll = Beast(
@@ -157,6 +162,7 @@ class Beasts {
       telegraphText: 'The troll hefts a boulder.',
       effect: BeastSpecialEffect.bigHitStun,
     ),
+    weaknessHint: 'Heavy Strike — armor breaks under force',
   );
 
   static const Beast tideHound = Beast(
@@ -309,6 +315,20 @@ class Beasts {
     ],
   );
 
+  static const Beast shoreCrab = Beast(
+    id: 'shore_crab',
+    name: 'Shore Crab',
+    icon: '🦀',
+    maxHealth: 45,
+    attackPower: 7,
+    defense: 4,
+    xpReward: 35,
+    lootTable: [
+      LootDrop(item: Items.crawlerCarapace, chance: 0.50, minQuantity: 1, maxQuantity: 1),
+    ],
+    weaknessHint: 'Strike sides — armored front',
+  );
+
   static const List<Beast> all = [
     forestBoar,
     caveSpider,
@@ -317,6 +337,7 @@ class Beasts {
     tideHound,
     brineCrawler,
     saltTouchedDrowned,
+    shoreCrab,
     echoOfWilds,
     echoOfStone,
     echoOfTide,

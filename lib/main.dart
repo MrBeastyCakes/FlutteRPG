@@ -13,6 +13,7 @@ import 'widgets/floating_notification.dart';
 import 'widgets/narrative_event_modal.dart';
 
 import 'views/codex_view.dart';
+import 'views/tavern_view.dart';
 import 'widgets/world_event_widgets.dart';
 
 void main() {
@@ -40,6 +41,7 @@ class MyApp extends StatelessWidget {
       ),
       routes: {
         '/codex': (context) => const CodexView(),
+        '/tavern': (context) => const TavernView(),
       },
     );
   }

@@ -1672,4 +1672,12 @@ class Recipes {
       return null;
     }
   }
+
+  static Recipe? findByResultItemId(String itemId) {
+    try {
+      return all.firstWhere((recipe) => recipe.resultItemId == itemId);
+    } catch (_) {
+      return null;
+    }
+  }
 }
