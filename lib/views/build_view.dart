@@ -9,8 +9,19 @@ import '../models/inventory.dart';
 import '../models/item.dart';
 import '../models/recipe.dart';
 import '../models/crafted_item.dart';
-import '../theme/game_theme.dart';
-import '../widgets/custom_progress_bar.dart';
+import '../theme/design_tokens.dart';
+
+import '../widgets/game/game_card.dart';
+import '../widgets/game/game_button.dart';
+import '../widgets/game/game_chip.dart';
+import '../widgets/game/game_progress_bar.dart';
+import '../widgets/game/game_tabs.dart';
+import '../widgets/game/game_list_item.dart';
+import '../widgets/game/game_avatar.dart';
+import '../widgets/game/game_sheet.dart';
+import '../widgets/game/game_toast.dart';
+import '../widgets/game/game_tooltip.dart';
+import '../widgets/game/game_input.dart';
 
 class BuildView extends StatefulWidget {
   const BuildView({Key? key}) : super(key: key);
@@ -86,15 +97,26 @@ class _BuildViewState extends State<BuildView> {
     }
 
     return Container(
-      color: GameTheme.background,
+      color: DSColors.surface0,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           // Header Workshop Dashboard Indicator
           _buildZoneHeader(context, currentZone, builtOperationalStations),
 
-          // Sub-Tab Switcher
-          _buildSubTabSwitcher(),
+          // Sub-Tab Switcher using GameTabs
+          GameTabs(
+            tabs: const [
+              GameTab(label: 'CRAFT RECIPES', icon: Icons.handyman),
+              GameTab(label: 'BUILD STATIONS', icon: Icons.domain),
+            ],
+            selectedIndex: _activeSubTab,
+            onChanged: (index) {
+              setState(() {
+                _activeSubTab = index;
+              });
+            },
+          ),
 
           // Active tab view body
           Expanded(
@@ -110,10 +132,10 @@ class _BuildViewState extends State<BuildView> {
   // Zone Header showing stations and activity indicator
   Widget _buildZoneHeader(BuildContext context, dynamic currentZone, List<StationInstance> builtOperationalStations) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
-      decoration: BoxDecoration(
-        color: GameTheme.cardBg,
-        border: const Border(bottom: BorderSide(color: GameTheme.border, width: 1.0)),
+      padding: const EdgeInsets.symmetric(horizontal: DSSpace.lg, vertical: DSSpace.md),
+      decoration: const BoxDecoration(
+        color: DSColors.surface1,
+        border: Border(bottom: BorderSide(color: DSColors.borderSubtle, width: 1.0)),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -124,32 +146,30 @@ class _BuildViewState extends State<BuildView> {
               children: [
                 Row(
                   children: [
-                    const Icon(Icons.location_on, color: GameTheme.accentGold, size: 14),
+                    const Icon(Icons.location_on, color: DSColors.accent, size: 14),
                     const SizedBox(width: 4),
                     Text(
                       currentZone.name.toUpperCase(),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
+                      style: DSText.headingSmall(context).copyWith(
+                        color: DSColors.textPrimary,
                         fontWeight: FontWeight.bold,
-                        letterSpacing: 1.1,
                       ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 2),
-                const Text(
+                Text(
                   'Explore zones to build specialist facilities.',
-                  style: TextStyle(color: GameTheme.textMuted, fontSize: 10),
+                  style: DSText.bodySmall(context).copyWith(fontSize: 10),
                 ),
               ],
             ),
           ),
           // Stations list row
           if (builtOperationalStations.isEmpty)
-            const Text(
+            Text(
               'No active stations',
-              style: TextStyle(color: GameTheme.textMuted, fontSize: 10, fontStyle: FontStyle.italic),
+              style: DSText.bodySmall(context).copyWith(fontSize: 10, fontStyle: FontStyle.italic),
             )
           else
             Row(
@@ -158,25 +178,25 @@ class _BuildViewState extends State<BuildView> {
                 if (station == null) return const SizedBox.shrink();
 
                 // Determine color based on activity
-                Color statusColor = Colors.greenAccent;
+                Color statusColor = DSColors.success;
                 if (inst.restoration != null) {
-                  statusColor = GameTheme.healthRed; // Ruined / Restoring
+                  statusColor = DSColors.error; // Ruined / Restoring
                 } else if (inst.tierUpgrade != null) {
-                  statusColor = Colors.blueAccent; // Upgrading
+                  statusColor = DSColors.info; // Upgrading
                 } else if (inst.currentCraft != null) {
-                  statusColor = GameTheme.energyYellow; // Crafting active
+                  statusColor = DSColors.warning; // Crafting active
                 }
 
                 String romanTier = _getRomanNumeral(inst.tier);
 
-                return Tooltip(
+                return GameTooltip(
                   message: '${station.name} Tier $romanTier',
                   child: Container(
                     margin: const EdgeInsets.only(left: 6),
                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                     decoration: BoxDecoration(
-                      color: GameTheme.background,
-                      borderRadius: BorderRadius.circular(6),
+                      color: DSColors.surface3,
+                      borderRadius: BorderRadius.circular(DSRadius.sm),
                       border: Border.all(color: statusColor.withOpacity(0.5)),
                     ),
                     child: Row(
@@ -186,7 +206,7 @@ class _BuildViewState extends State<BuildView> {
                         const SizedBox(width: 2),
                         Text(
                           romanTier,
-                          style: TextStyle(
+                          style: DSText.numeric(context).copyWith(
                             color: statusColor,
                             fontSize: 9,
                             fontWeight: FontWeight.bold,
@@ -203,67 +223,6 @@ class _BuildViewState extends State<BuildView> {
     );
   }
 
-  // Sub-Tab switcher
-  Widget _buildSubTabSwitcher() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 10.0),
-      child: Row(
-        children: [
-          Expanded(
-            child: _buildSubTabButton('CRAFT RECIPES', 0, Icons.handyman),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: _buildSubTabButton('BUILD STATIONS', 1, Icons.domain),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSubTabButton(String text, int index, IconData icon) {
-    final active = _activeSubTab == index;
-    return InkWell(
-      onTap: () {
-        setState(() {
-          _activeSubTab = index;
-        });
-      },
-      borderRadius: BorderRadius.circular(10),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 10.0),
-        decoration: BoxDecoration(
-          color: active ? GameTheme.craftingCyan.withOpacity(0.12) : GameTheme.cardBg,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-            color: active ? GameTheme.craftingCyan : GameTheme.border,
-            width: 1.5,
-          ),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              icon,
-              size: 14,
-              color: active ? GameTheme.craftingCyan : GameTheme.textMuted,
-            ),
-            const SizedBox(width: 8),
-            Text(
-              text,
-              style: TextStyle(
-                color: active ? Colors.white : GameTheme.textMuted,
-                fontSize: 11,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 1.0,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   // CRAFT RECIPES TAB
   Widget _buildCraftTab(
       BuildContext context,
@@ -272,17 +231,17 @@ class _BuildViewState extends State<BuildView> {
       List<StationInstance> builtOperationalStations) {
     if (builtOperationalStations.isEmpty) {
       return Padding(
-        padding: const EdgeInsets.all(24.0),
+        padding: const EdgeInsets.all(DSSpace.xl),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Icon(Icons.handyman, size: 64, color: GameTheme.textMuted),
+            const Icon(Icons.handyman, size: 64, color: DSColors.textMuted),
             const SizedBox(height: 16),
-            const Text(
+            Text(
               'No Operational Stations Here',
               textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+              style: DSText.headingMedium(context),
             ),
             const SizedBox(height: 8),
             Text(
@@ -290,22 +249,17 @@ class _BuildViewState extends State<BuildView> {
                   ? 'The Town Square stations are ruined. You must restore them in the BUILD STATIONS sub-tab first.'
                   : 'You have not built any crafting or production facilities in ${currentZone.name} yet. Travel to the BUILD STATIONS tab to create one.',
               textAlign: TextAlign.center,
-              style: const TextStyle(color: GameTheme.textMuted, fontSize: 12, height: 1.4),
+              style: DSText.bodyMedium(context).copyWith(color: DSColors.textMuted, height: 1.4),
             ),
             const SizedBox(height: 20),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: GameTheme.craftingCyan,
-                foregroundColor: Colors.black,
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              ),
+            GameButton(
+              variant: GameButtonVariant.primary,
+              label: 'Go Build & Restore',
               onPressed: () {
                 setState(() {
                   _activeSubTab = 1; // Swap to build tab
                 });
               },
-              child: const Text('Go Build & Restore', style: TextStyle(fontWeight: FontWeight.bold)),
             ),
           ],
         ),
@@ -422,17 +376,17 @@ class _BuildViewState extends State<BuildView> {
 
         // Info details of the station
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0),
+          padding: const EdgeInsets.symmetric(horizontal: DSSpace.lg),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
                 '${selectedStation.name} Lvl ${selectedInstance.tier}',
-                style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                style: DSText.headingSmall(context).copyWith(fontSize: 13, fontWeight: FontWeight.bold),
               ),
               Text(
                 'Quality Bias: +${(activeStationQualityBias * 100).toInt()}% | Slots: ${selectedStation.getTier(selectedInstance.tier).queueSlots}',
-                style: const TextStyle(color: GameTheme.craftingCyan, fontSize: 11, fontWeight: FontWeight.bold),
+                style: DSText.label(context).copyWith(color: DSColors.accent, fontSize: 11, fontWeight: FontWeight.bold),
               ),
             ],
           ),
@@ -444,24 +398,22 @@ class _BuildViewState extends State<BuildView> {
 
         if (materialRepairWidgets.isNotEmpty)
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-            child: Container(
-              padding: const EdgeInsets.all(12),
-              decoration: GameTheme.glassCardDecoration(),
+            padding: const EdgeInsets.fromLTRB(DSSpace.lg, 8, DSSpace.lg, 8),
+            child: GameCard(
+              elevation: 2,
+              accentColor: DSColors.skill(SkillType.crafting),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const Row(
+                  Row(
                     children: [
-                      Text('🛠️', style: TextStyle(fontSize: 16)),
-                      SizedBox(width: 8),
+                      const Text('🛠️', style: TextStyle(fontSize: 16)),
+                      const SizedBox(width: 8),
                       Text(
                         'EQUIPMENT MAINTENANCE (BENCH REPAIRS)',
-                        style: TextStyle(
-                          color: GameTheme.craftingCyan,
-                          fontSize: 11,
+                        style: DSText.label(context).copyWith(
+                          color: DSColors.skill(SkillType.crafting),
                           fontWeight: FontWeight.bold,
-                          letterSpacing: 1.0,
                         ),
                       ),
                     ],
@@ -512,7 +464,7 @@ class _BuildViewState extends State<BuildView> {
                   Text(
                     station.name,
                     style: TextStyle(
-                      color: isSelected ? Colors.black : Colors.white,
+                      color: isSelected ? DSColors.textOnAccent : DSColors.textPrimary,
                       fontSize: 12,
                       fontWeight: FontWeight.bold,
                     ),
@@ -521,13 +473,13 @@ class _BuildViewState extends State<BuildView> {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
                     decoration: BoxDecoration(
-                      color: isSelected ? Colors.black.withOpacity(0.12) : const Color(0xFF2C3E50),
+                      color: isSelected ? Colors.black.withOpacity(0.2) : DSColors.surface4,
                       borderRadius: BorderRadius.circular(4),
                     ),
                     child: Text(
                       _getRomanNumeral(inst.tier),
                       style: TextStyle(
-                        color: isSelected ? Colors.black : GameTheme.craftingCyan,
+                        color: isSelected ? DSColors.textOnAccent : DSColors.accent,
                         fontSize: 9,
                         fontWeight: FontWeight.bold,
                       ),
@@ -536,8 +488,8 @@ class _BuildViewState extends State<BuildView> {
                 ],
               ),
               selected: isSelected,
-              selectedColor: GameTheme.craftingCyan,
-              backgroundColor: GameTheme.cardBg,
+              selectedColor: DSColors.accent,
+              backgroundColor: DSColors.surface2,
               onSelected: (selected) {
                 if (selected) {
                   setState(() {
@@ -574,12 +526,12 @@ class _BuildViewState extends State<BuildView> {
         final count = engine.inventory.getItemCount(itemId);
         final hasEnough = count >= qtyNeeded;
         if (idx > 0) {
-          costSpans.add(const TextSpan(text: ', ', style: TextStyle(color: Colors.white70)));
+          costSpans.add(const TextSpan(text: ', ', style: TextStyle(color: DSColors.textSecondary)));
         }
         costSpans.add(TextSpan(
           text: '${item.icon} ${item.name} ($count/$qtyNeeded)',
           style: TextStyle(
-            color: hasEnough ? GameTheme.craftingCyan : Colors.redAccent,
+            color: hasEnough ? DSColors.accent : DSColors.error,
             fontWeight: FontWeight.bold,
           ),
         ));
@@ -587,20 +539,27 @@ class _BuildViewState extends State<BuildView> {
       }
     });
 
+    final currentDurability = slot.currentDurability;
+    final maxDurability = slot.maxDurability;
+    final progressVal = maxDurability > 0 ? currentDurability / maxDurability : 0.0;
+
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: const Color(0xFF1E2833).withOpacity(0.5),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: GameTheme.border.withOpacity(0.3)),
+        color: DSColors.surface3,
+        borderRadius: BorderRadius.circular(DSRadius.md),
+        border: Border.all(color: DSColors.borderSubtle),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
             children: [
-              Text(slot.item.icon, style: const TextStyle(fontSize: 24)),
+              GameAvatar(
+                emoji: slot.item.icon,
+                size: GameAvatarSize.sm,
+              ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -608,32 +567,26 @@ class _BuildViewState extends State<BuildView> {
                   children: [
                     Text(
                       '${slot.quality != null && slot.quality != QualityTier.standard ? "${slot.quality!.name.toUpperCase()} " : ""}${slot.item.name}',
-                      style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                      style: DSText.bodyMedium(context).copyWith(fontWeight: FontWeight.bold),
                     ),
                     const SizedBox(height: 4),
                     Row(
                       children: [
                         Expanded(
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(4),
-                            child: LinearProgressIndicator(
-                              value: slot.maxDurability > 0 ? slot.currentDurability / slot.maxDurability : 0.0,
-                              backgroundColor: Colors.white.withOpacity(0.1),
-                              valueColor: AlwaysStoppedAnimation<Color>(
-                                slot.currentDurability == 0
-                                    ? Colors.redAccent
-                                    : slot.currentDurability / slot.maxDurability < 0.25
-                                        ? Colors.orangeAccent
-                                        : GameTheme.craftingCyan,
-                              ),
-                              minHeight: 6,
-                            ),
+                          child: GameProgressBar(
+                            progress: progressVal,
+                            color: progressVal == 0
+                                ? DSColors.error
+                                : progressVal < 0.25
+                                    ? DSColors.warning
+                                    : DSColors.accent,
+                            height: 6,
                           ),
                         ),
                         const SizedBox(width: 8),
                         Text(
-                          '${slot.currentDurability}/${slot.maxDurability}',
-                          style: const TextStyle(color: GameTheme.textMuted, fontSize: 10),
+                          '$currentDurability/$maxDurability',
+                          style: DSText.numeric(context).copyWith(fontSize: 10, color: DSColors.textMuted),
                         ),
                       ],
                     ),
@@ -641,19 +594,16 @@ class _BuildViewState extends State<BuildView> {
                 ),
               ),
               const SizedBox(width: 16),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: canRepair ? GameTheme.craftingCyan : Colors.white10,
-                  foregroundColor: canRepair ? Colors.black : Colors.white24,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  minimumSize: Size.zero,
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                ),
+              GameButton(
+                variant: canRepair ? GameButtonVariant.primary : GameButtonVariant.ghost,
+                label: 'Repair',
+                size: GameButtonSize.sm,
                 onPressed: canRepair
-                    ? () => engine.repairWithMaterials(slot, slot: slotName, skill: skill)
+                    ? () {
+                        engine.repairWithMaterials(slot, slot: slotName, skill: skill);
+                        GameToast.show(context, 'Successfully repaired ${slot.item.name}!');
+                      }
                     : null,
-                child: const Text('Repair', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
               ),
             ],
           ),
@@ -661,9 +611,9 @@ class _BuildViewState extends State<BuildView> {
             const SizedBox(height: 8),
             RichText(
               text: TextSpan(
-                style: const TextStyle(fontSize: 11, color: Colors.white70),
+                style: DSText.bodySmall(context),
                 children: [
-                  const TextSpan(text: 'Requires: '),
+                  const TextSpan(text: 'Requires: ', style: TextStyle(color: DSColors.textMuted)),
                   ...costSpans,
                 ],
               ),
@@ -677,35 +627,21 @@ class _BuildViewState extends State<BuildView> {
   // Search, category chips, showLocked toggle, craftableOnly toggle
   Widget _buildSearchAndFiltersPanel(List<String> categories) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+      padding: const EdgeInsets.symmetric(horizontal: DSSpace.lg),
       child: Column(
         children: [
           // Search box + Toggle row
           Row(
             children: [
               Expanded(
-                child: Container(
-                  height: 36,
-                  decoration: BoxDecoration(
-                    color: GameTheme.cardBg,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: GameTheme.border),
-                  ),
-                  child: TextField(
-                    onChanged: (val) {
-                      setState(() {
-                        _recipeSearchQuery = val;
-                      });
-                    },
-                    style: const TextStyle(color: Colors.white, fontSize: 13),
-                    decoration: const InputDecoration(
-                      hintText: 'Search recipes...',
-                      hintStyle: TextStyle(color: GameTheme.textMuted, fontSize: 12),
-                      prefixIcon: Icon(Icons.search, color: GameTheme.textMuted, size: 16),
-                      border: InputBorder.none,
-                      contentPadding: EdgeInsets.symmetric(vertical: 8),
-                    ),
-                  ),
+                child: GameInput(
+                  hintText: 'Search recipes...',
+                  prefixIcon: const Icon(Icons.search, color: DSColors.textMuted, size: 16),
+                  onChanged: (val) {
+                    setState(() {
+                      _recipeSearchQuery = val;
+                    });
+                  },
                 ),
               ),
               const SizedBox(width: 8),
@@ -713,7 +649,6 @@ class _BuildViewState extends State<BuildView> {
               _buildFilterIconButton(
                 icon: _showLocked ? Icons.visibility : Icons.visibility_off,
                 active: _showLocked,
-                tooltip: 'Show Locked Recipes',
                 onPressed: () {
                   setState(() {
                     _showLocked = !_showLocked;
@@ -725,7 +660,6 @@ class _BuildViewState extends State<BuildView> {
               _buildFilterIconButton(
                 icon: Icons.flash_on,
                 active: _craftableOnly,
-                tooltip: 'Show Craftable Only',
                 onPressed: () {
                   setState(() {
                     _craftableOnly = !_craftableOnly;
@@ -757,18 +691,18 @@ class _BuildViewState extends State<BuildView> {
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
                         decoration: BoxDecoration(
-                          color: isSelected ? GameTheme.craftingCyan.withOpacity(0.15) : Colors.transparent,
+                          color: isSelected ? DSColors.accent.withOpacity(0.15) : Colors.transparent,
                           borderRadius: BorderRadius.circular(6),
                           border: Border.all(
-                            color: isSelected ? GameTheme.craftingCyan : GameTheme.border,
+                            color: isSelected ? DSColors.accent : DSColors.borderDefault,
                             width: 1.0,
                           ),
                         ),
                         child: Center(
                           child: Text(
                             cat,
-                            style: TextStyle(
-                              color: isSelected ? Colors.white : GameTheme.textMuted,
+                            style: DSText.label(context).copyWith(
+                              color: isSelected ? DSColors.textPrimary : DSColors.textMuted,
                               fontSize: 10.5,
                               fontWeight: FontWeight.bold,
                             ),
@@ -785,24 +719,24 @@ class _BuildViewState extends State<BuildView> {
     );
   }
 
-  Widget _buildFilterIconButton({required IconData icon, required bool active, required String tooltip, required VoidCallback onPressed}) {
+  Widget _buildFilterIconButton({required IconData icon, required bool active, required VoidCallback onPressed}) {
     return Material(
-      color: active ? GameTheme.craftingCyan.withOpacity(0.12) : GameTheme.cardBg,
-      borderRadius: BorderRadius.circular(8),
+      color: active ? DSColors.accent.withOpacity(0.12) : DSColors.surface2,
+      borderRadius: BorderRadius.circular(DSRadius.md),
       child: InkWell(
         onTap: onPressed,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(DSRadius.md),
         child: Container(
           width: 36,
           height: 36,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: active ? GameTheme.craftingCyan : GameTheme.border),
+            borderRadius: BorderRadius.circular(DSRadius.md),
+            border: Border.all(color: active ? DSColors.accent : DSColors.borderDefault),
           ),
           child: Icon(
             icon,
             size: 16,
-            color: active ? GameTheme.craftingCyan : GameTheme.textMuted,
+            color: active ? DSColors.accent : DSColors.textMuted,
           ),
         ),
       ),
@@ -813,13 +747,13 @@ class _BuildViewState extends State<BuildView> {
     final isSaltPress = _selectedStationId == 'salt_press';
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(24.0),
+        padding: const EdgeInsets.all(DSSpace.xl),
         child: Text(
           isSaltPress
               ? 'No recipes available yet. (Future content)'
               : 'No recipes match the active filters.\nTry enabling "Show Locked" or clearing search query.',
           textAlign: TextAlign.center,
-          style: const TextStyle(color: GameTheme.textMuted, fontSize: 12, height: 1.4),
+          style: DSText.bodyMedium(context).copyWith(color: DSColors.textMuted, height: 1.4),
         ),
       ),
     );
@@ -841,13 +775,13 @@ class _BuildViewState extends State<BuildView> {
             itemBuilder: (context, pageIdx) {
               final pageRecipes = pages[pageIdx];
               return Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                padding: const EdgeInsets.symmetric(horizontal: DSSpace.lg, vertical: DSSpace.sm),
                 child: GridView.builder(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
                   gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: 2,
-                    childAspectRatio: 0.82,
+                    childAspectRatio: 0.76,
                     crossAxisSpacing: 10,
                     mainAxisSpacing: 10,
                   ),
@@ -875,7 +809,7 @@ class _BuildViewState extends State<BuildView> {
                   height: 6,
                   margin: const EdgeInsets.symmetric(horizontal: 3),
                   decoration: BoxDecoration(
-                    color: isSelected ? GameTheme.craftingCyan : GameTheme.border,
+                    color: isSelected ? DSColors.accent : DSColors.borderDefault,
                     borderRadius: BorderRadius.circular(3),
                   ),
                 );
@@ -891,15 +825,15 @@ class _BuildViewState extends State<BuildView> {
     final resultItem = recipe.resultItem;
     if (resultItem == null) return const SizedBox.shrink();
 
-    // Rarity colors
-    Color rarityBorder = GameTheme.border.withOpacity(0.6);
-    Color glowColor = Colors.transparent;
+    // Custom coloring based on recipe rarity
+    Color rarityBorder = DSColors.borderSubtle;
+    Color? accentBar;
     if (recipe.rarity == RecipeRarity.rare) {
-      rarityBorder = Colors.blueAccent.withOpacity(0.5);
-      glowColor = Colors.blueAccent.withOpacity(0.04);
+      rarityBorder = DSColors.info;
+      accentBar = DSColors.info;
     } else if (recipe.rarity == RecipeRarity.legendary) {
-      rarityBorder = GameTheme.accentGold.withOpacity(0.5);
-      glowColor = GameTheme.accentGold.withOpacity(0.04);
+      rarityBorder = DSColors.accent;
+      accentBar = DSColors.accent;
     }
 
     final skillState = engine.skills[recipe.requiredSkill];
@@ -915,152 +849,117 @@ class _BuildViewState extends State<BuildView> {
       }
     }
 
-    return Card(
-      color: isUnlocked ? GameTheme.cardBg : GameTheme.cardBg.withOpacity(0.4),
-      elevation: 2,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: rarityBorder, width: isUnlocked ? 1.2 : 0.8),
-      ),
-      child: InkWell(
-        onTap: () {
-          if (!isUnlocked) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('🔒 Recipe Locked: Find the blueprint scroll for "${recipe.name}" to unlock.'),
-                backgroundColor: GameTheme.healthRed,
-                behavior: SnackBarBehavior.floating,
-              ),
-            );
-            return;
-          }
-          if (!levelMet) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('⚠️ Requires level ${recipe.requiredLevel} ${recipe.requiredSkill.name}.'),
-                backgroundColor: GameTheme.healthRed,
-                behavior: SnackBarBehavior.floating,
-              ),
-            );
-            return;
-          }
-          // Open Configuration Sheet
-          _showRecipeConfigSheet(context, engine, recipe, inst);
-        },
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          decoration: BoxDecoration(
-            color: glowColor,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          padding: const EdgeInsets.all(8.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+    return GameCard(
+      elevation: isUnlocked ? 1 : 0,
+      accentColor: accentBar,
+      onTap: () {
+        if (!isUnlocked) {
+          GameToast.show(context, '🔒 Recipe Locked: Find the blueprint scroll for "${recipe.name}" to unlock.', isError: true);
+          return;
+        }
+        if (!levelMet) {
+          GameToast.show(context, '⚠️ Requires level ${recipe.requiredLevel} ${recipe.requiredSkill.name}.', isError: true);
+          return;
+        }
+        // Open Configuration Sheet
+        _showRecipeConfigSheet(context, engine, recipe, inst);
+      },
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Icon and Name
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Icon and Name
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(resultItem.icon, style: const TextStyle(fontSize: 22)),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      recipe.name,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: isUnlocked ? Colors.white : GameTheme.textMuted,
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ],
+              GameAvatar(
+                emoji: resultItem.icon,
+                size: GameAvatarSize.sm,
+                backgroundColor: isUnlocked ? DSColors.surface3 : DSColors.surface1,
               ),
-              const SizedBox(height: 4),
-              // Req level
-              Row(
-                children: [
-                  Icon(
-                    Icons.psychology,
-                    size: 11,
-                    color: levelMet ? GameTheme.textMuted : GameTheme.healthRed,
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  recipe.name,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: DSText.headingSmall(context).copyWith(
+                    color: isUnlocked ? DSColors.textPrimary : DSColors.textDisabled,
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.bold,
                   ),
-                  const SizedBox(width: 2),
-                  Expanded(
-                    child: Text(
-                      '${recipe.requiredSkill.name.substring(0, min(5, recipe.requiredSkill.name.length))} Lvl ${recipe.requiredLevel}',
-                      style: TextStyle(
-                        color: levelMet ? GameTheme.textMuted : GameTheme.healthRed,
-                        fontSize: 9,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const Spacer(),
-              // Input items horizontal row
-              Row(
-                children: recipe.slots.map((slot) {
-                  final item = Items.findById(slot.acceptedItems.first.itemId);
-                  final hasEnough = engine.inventory.getItemCount(slot.acceptedItems.first.itemId) >= slot.quantity;
-                  return Container(
-                    margin: const EdgeInsets.only(right: 4),
-                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF131A21),
-                      borderRadius: BorderRadius.circular(4),
-                      border: Border.all(
-                        color: hasEnough ? GameTheme.border.withOpacity(0.3) : GameTheme.healthRed.withOpacity(0.3),
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(item?.icon ?? '📦', style: const TextStyle(fontSize: 9)),
-                        const SizedBox(width: 1),
-                        Text(
-                          '${slot.quantity}',
-                          style: TextStyle(
-                            color: hasEnough ? Colors.white70 : GameTheme.healthRed,
-                            fontSize: 8.5,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                }).toList(),
-              ),
-              const SizedBox(height: 6),
-              // Queue Button
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: canQuickQueue ? GameTheme.craftingCyan : const Color(0xFF23303D),
-                  foregroundColor: canQuickQueue ? Colors.black : GameTheme.textMuted,
-                  minimumSize: const Size.fromHeight(24),
-                  padding: EdgeInsets.zero,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                 ),
-                onPressed: canQuickQueue
-                    ? () {
-                        // Quick queue with default choices
-                        engine.startCrafting(recipe);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('Queued 1x ${recipe.name}!'),
-                            backgroundColor: Colors.greenAccent,
-                            duration: const Duration(seconds: 1),
-                            behavior: SnackBarBehavior.floating,
-                          ),
-                        );
-                      }
-                    : null,
-                child: const Text('Quick Queue', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 10)),
               ),
             ],
           ),
-        ),
+          const SizedBox(height: 6),
+          // Req level
+          Row(
+            children: [
+              Icon(
+                Icons.psychology,
+                size: 11,
+                color: levelMet ? DSColors.textMuted : DSColors.error,
+              ),
+              const SizedBox(width: 2),
+              Expanded(
+                child: Text(
+                  '${recipe.requiredSkill.name.substring(0, min(5, recipe.requiredSkill.name.length))} Lvl ${recipe.requiredLevel}',
+                  style: DSText.bodySmall(context).copyWith(
+                    color: levelMet ? DSColors.textMuted : DSColors.error,
+                    fontSize: 9,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const Spacer(),
+          // Input items horizontal row
+          Row(
+            children: recipe.slots.map((slot) {
+              final item = Items.findById(slot.acceptedItems.first.itemId);
+              final hasEnough = engine.inventory.getItemCount(slot.acceptedItems.first.itemId) >= slot.quantity;
+              return Container(
+                margin: const EdgeInsets.only(right: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                decoration: BoxDecoration(
+                  color: DSColors.surface0,
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(
+                    color: hasEnough ? DSColors.borderSubtle : DSColors.error.withOpacity(0.3),
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(item?.icon ?? '📦', style: const TextStyle(fontSize: 9)),
+                    const SizedBox(width: 1),
+                    Text(
+                      '${slot.quantity}',
+                      style: DSText.numeric(context).copyWith(
+                        color: hasEnough ? DSColors.textSecondary : DSColors.error,
+                        fontSize: 8.5,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 6),
+          // Queue Button
+          GameButton(
+            variant: canQuickQueue ? GameButtonVariant.primary : GameButtonVariant.ghost,
+            label: 'Quick Queue',
+            size: GameButtonSize.sm,
+            onPressed: canQuickQueue
+                ? () {
+                    engine.startCrafting(recipe);
+                    GameToast.show(context, 'Queued 1x ${recipe.name}!');
+                  }
+                : null,
+          ),
+        ],
       ),
     );
   }
@@ -1081,40 +980,40 @@ class _BuildViewState extends State<BuildView> {
         _showExpandedQueueSheet(context, engine, inst);
       },
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 10.0),
+        padding: const EdgeInsets.symmetric(horizontal: DSSpace.lg, vertical: 10.0),
         decoration: const BoxDecoration(
-          color: Color(0xFF1E2833),
-          border: Border(top: BorderSide(color: GameTheme.border, width: 1.5)),
+          color: DSColors.surface1,
+          border: Border(top: BorderSide(color: DSColors.borderDefault, width: 1.5)),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Row(
               children: [
-                const Icon(Icons.timer_outlined, color: GameTheme.craftingCyan, size: 16),
+                const Icon(Icons.timer_outlined, color: DSColors.accent, size: 16),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     activeCraft != null
                         ? 'Crafting: ${recipe?.name ?? ""} (${(activeCraft.progress * 100).toInt()}%)'
                         : 'Idle (Wait for energy)',
-                    style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                    style: DSText.bodyMedium(context).copyWith(fontWeight: FontWeight.bold),
                   ),
                 ),
                 if (totalQueued > 0)
                   Text(
                     '+ $totalQueued queued',
-                    style: const TextStyle(color: GameTheme.accentGold, fontSize: 11, fontWeight: FontWeight.bold),
+                    style: DSText.numeric(context).copyWith(color: DSColors.accent, fontSize: 11, fontWeight: FontWeight.bold),
                   ),
                 const SizedBox(width: 8),
-                const Icon(Icons.keyboard_arrow_up, color: GameTheme.textMuted, size: 16),
+                const Icon(Icons.keyboard_arrow_up, color: DSColors.textMuted, size: 16),
               ],
             ),
             if (activeCraft != null) ...[
               const SizedBox(height: 6),
-              CustomProgressBar(
+              GameProgressBar(
                 progress: activeCraft.progress,
-                color: GameTheme.craftingCyan,
+                color: DSColors.accent,
                 height: 4,
               ),
             ],
@@ -1126,205 +1025,170 @@ class _BuildViewState extends State<BuildView> {
 
   // Expanded Queue Sheet Modal
   void _showExpandedQueueSheet(BuildContext context, GameEngine engine, StationInstance inst) {
-    showModalBottomSheet(
+    GameSheet.show(
       context: context,
-      backgroundColor: GameTheme.background,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-        side: BorderSide(color: GameTheme.border, width: 1.5),
-      ),
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            // Listen to game engine ticks to update progress in modal!
-            return ListenableBuilder(
-              listenable: engine,
-              builder: (context, _) {
-                final activeCraft = inst.currentCraft;
-                final queueList = inst.queue;
+      title: '${Stations.findById(inst.stationId)?.name ?? ""} Queue',
+      child: ListenableBuilder(
+        listenable: engine,
+        builder: (context, _) {
+          final activeCraft = inst.currentCraft;
+          final queueList = inst.queue;
 
-                return Padding(
-                  padding: const EdgeInsets.all(16.0),
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Head: Current Craft
+              if (activeCraft != null) ...[
+                Text(
+                  'IN PROGRESS',
+                  style: DSText.label(context),
+                ),
+                const SizedBox(height: 6),
+                GameCard(
+                  elevation: 2,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Row(
-                            children: [
-                              const Icon(Icons.hourglass_bottom, color: GameTheme.craftingCyan),
-                              const SizedBox(width: 8),
-                              Text(
-                                '${Stations.findById(inst.stationId)?.name ?? ""} Queue',
-                                style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
-                              ),
-                            ],
+                          GameAvatar(
+                            emoji: activeCraft.recipe?.resultItem?.icon ?? '📦',
+                            size: GameAvatarSize.sm,
                           ),
-                          IconButton(
-                            icon: const Icon(Icons.close, color: GameTheme.textMuted),
-                            onPressed: () => Navigator.pop(context),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              activeCraft.recipe?.name ?? '',
+                              style: DSText.bodyMedium(context).copyWith(fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                          Text(
+                            '${(activeCraft.progress * 100).toInt()}%',
+                            style: DSText.numeric(context).copyWith(color: DSColors.accent, fontWeight: FontWeight.bold),
                           ),
                         ],
                       ),
-                      const Divider(color: GameTheme.border),
                       const SizedBox(height: 8),
-                      // Head: Current Craft
-                      if (activeCraft != null) ...[
-                        const Text(
-                          'IN PROGRESS',
-                          style: TextStyle(color: GameTheme.textMuted, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.1),
-                        ),
-                        const SizedBox(height: 6),
-                        Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: GameTheme.cardBg,
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: GameTheme.border),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              Row(
-                                children: [
-                                  Text(activeCraft.recipe?.resultItem?.icon ?? '📦', style: const TextStyle(fontSize: 20)),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Text(
-                                      activeCraft.recipe?.name ?? '',
-                                      style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
-                                    ),
-                                  ),
-                                  Text(
-                                    '${(activeCraft.progress * 100).toInt()}%',
-                                    style: const TextStyle(color: GameTheme.craftingCyan, fontSize: 13, fontWeight: FontWeight.bold),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 8),
-                              CustomProgressBar(
-                                progress: activeCraft.progress,
-                                color: GameTheme.craftingCyan,
-                                height: 8,
-                              ),
-                              const SizedBox(height: 6),
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Text(
-                                    'Remaining time: ${(activeCraft.durationSeconds * (1.0 - activeCraft.progress)).toStringAsFixed(1)}s',
-                                    style: const TextStyle(color: GameTheme.textMuted, fontSize: 10),
-                                  ),
-                                  TextButton(
-                                    style: TextButton.styleFrom(
-                                      foregroundColor: GameTheme.healthRed,
-                                      padding: EdgeInsets.zero,
-                                      minimumSize: const Size(60, 20),
-                                    ),
-                                    onPressed: () {
-                                      // Cancel the queue index 0
-                                      engine.cancelStationQueueEntry("${inst.zoneId}::${inst.stationId}", 0);
-                                      if (inst.queue.isEmpty && inst.currentCraft == null) {
-                                        Navigator.pop(context);
-                                      }
-                                    },
-                                    child: const Text('Cancel & Refund', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                      ] else ...[
-                        Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: GameTheme.cardBg,
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Center(
-                            child: Text(
-                              _selectedStationId == 'salt_press'
-                                  ? 'Idle — no recipes to queue.'
-                                  : 'Station is currently idle.',
-                              style: const TextStyle(color: GameTheme.textMuted, fontSize: 12, fontStyle: FontStyle.italic),
-                            ),
-                          ),
-                        ),
-                      ],
-                      const SizedBox(height: 16),
-                      // Queue entries list
-                      const Text(
-                        'QUEUE LINE',
-                        style: TextStyle(color: GameTheme.textMuted, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.1),
+                      GameProgressBar(
+                        progress: activeCraft.progress,
+                        color: DSColors.accent,
+                        height: 8,
                       ),
                       const SizedBox(height: 6),
-                      Expanded(
-                        child: queueList.length <= 1
-                            ? const Center(
-                                child: Text(
-                                  'No other items in queue.',
-                                  style: TextStyle(color: GameTheme.textMuted, fontSize: 11),
-                                ),
-                              )
-                            : ListView.builder(
-                                itemCount: queueList.length - 1,
-                                itemBuilder: (context, index) {
-                                  // queueList[0] is in-flight, so list index starts from 1
-                                  final queueIdx = index + 1;
-                                  final entry = queueList[queueIdx];
-                                  final recipe = Recipes.findById(entry.recipeId);
-                                  if (recipe == null) return const SizedBox.shrink();
-
-                                  return Container(
-                                    margin: const EdgeInsets.only(bottom: 8),
-                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                    decoration: BoxDecoration(
-                                      color: GameTheme.cardBg,
-                                      borderRadius: BorderRadius.circular(8),
-                                      border: Border.all(color: GameTheme.border.withOpacity(0.5)),
-                                    ),
-                                    child: Row(
-                                      children: [
-                                        Text(recipe.resultItem?.icon ?? '📦', style: const TextStyle(fontSize: 18)),
-                                        const SizedBox(width: 8),
-                                        Expanded(
-                                          child: Column(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
-                                            children: [
-                                              Text(
-                                                recipe.name,
-                                                style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
-                                              ),
-                                              const SizedBox(height: 2),
-                                              Text(
-                                                'Count: ${entry.count} iterations',
-                                                style: const TextStyle(color: GameTheme.textMuted, fontSize: 10),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                        IconButton(
-                                          icon: const Icon(Icons.delete_outline, color: GameTheme.healthRed, size: 18),
-                                          onPressed: () {
-                                            engine.cancelStationQueueEntry("${inst.zoneId}::${inst.stationId}", queueIdx);
-                                          },
-                                        ),
-                                      ],
-                                    ),
-                                  );
-                                },
-                              ),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Remaining time: ${(activeCraft.durationSeconds * (1.0 - activeCraft.progress)).toStringAsFixed(1)}s',
+                            style: DSText.bodySmall(context).copyWith(color: DSColors.textMuted),
+                          ),
+                          GameButton(
+                            variant: GameButtonVariant.danger,
+                            label: 'Cancel',
+                            size: GameButtonSize.sm,
+                            onPressed: () {
+                              engine.cancelStationQueueEntry("${inst.zoneId}::${inst.stationId}", 0);
+                              if (inst.queue.isEmpty && inst.currentCraft == null) {
+                                Navigator.pop(context);
+                              }
+                            },
+                          ),
+                        ],
                       ),
                     ],
                   ),
-                );
-              },
-            );
-          },
-        );
-      },
+                ),
+              ] else ...[
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: DSColors.surface2,
+                    borderRadius: BorderRadius.circular(DSRadius.md),
+                  ),
+                  child: Center(
+                    child: Text(
+                      _selectedStationId == 'salt_press'
+                          ? 'Idle — no recipes to queue.'
+                          : 'Station is currently idle.',
+                      style: DSText.bodyMedium(context).copyWith(color: DSColors.textMuted, fontStyle: FontStyle.italic),
+                    ),
+                  ),
+                ),
+              ],
+              const SizedBox(height: 16),
+              // Queue entries list
+              Text(
+                'QUEUE LINE',
+                style: DSText.label(context),
+              ),
+              const SizedBox(height: 6),
+              queueList.length <= 1
+                  ? Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 24.0),
+                      child: Center(
+                        child: Text(
+                          'No other items in queue.',
+                          style: DSText.bodyMedium(context).copyWith(color: DSColors.textMuted),
+                        ),
+                      ),
+                    )
+                  : ListView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: queueList.length - 1,
+                      itemBuilder: (context, index) {
+                        // queueList[0] is in-flight, so list index starts from 1
+                        final queueIdx = index + 1;
+                        final entry = queueList[queueIdx];
+                        final recipe = Recipes.findById(entry.recipeId);
+                        if (recipe == null) return const SizedBox.shrink();
+
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: DSColors.surface2,
+                            borderRadius: BorderRadius.circular(DSRadius.md),
+                            border: Border.all(color: DSColors.borderSubtle),
+                          ),
+                          child: Row(
+                            children: [
+                              GameAvatar(
+                                emoji: recipe.resultItem?.icon ?? '📦',
+                                size: GameAvatarSize.sm,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      recipe.name,
+                                      style: DSText.bodyMedium(context).copyWith(fontWeight: FontWeight.bold),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      'Count: ${entry.count} iterations',
+                                      style: DSText.bodySmall(context),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.delete_outline, color: DSColors.error, size: 18),
+                                onPressed: () {
+                                  engine.cancelStationQueueEntry("${inst.zoneId}::${inst.stationId}", queueIdx);
+                                },
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+            ],
+          );
+        },
+      ),
     );
   }
 
@@ -1354,11 +1218,7 @@ class _BuildViewState extends State<BuildView> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: GameTheme.background,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-        side: BorderSide(color: GameTheme.border, width: 1.5),
-      ),
+      backgroundColor: Colors.transparent,
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setModalState) {
@@ -1411,338 +1271,295 @@ class _BuildViewState extends State<BuildView> {
               craftCount = maxCraftCount;
             }
 
-            return Padding(
-              padding: EdgeInsets.only(
-                left: 16.0,
-                right: 16.0,
-                top: 16.0,
-                bottom: MediaQuery.of(context).viewInsets.bottom + 16.0,
-              ),
-              child: SingleChildScrollView(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Header
-                    Row(
-                      children: [
-                        Text(resultItem.icon, style: const TextStyle(fontSize: 24)),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            'Configure: ${recipe.name}',
-                            style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
-                          ),
+            return GameSheet(
+              title: 'Configure: ${recipe.name}',
+              actions: [
+                GameButton(
+                  variant: GameButtonVariant.primary,
+                  label: 'Queue $craftCount x ${recipe.name}',
+                  onPressed: () {
+                    // Check if player has all choices multiplied by craftCount
+                    bool hasAll = true;
+                    for (int i = 0; i < recipe.slots.length; i++) {
+                      final slot = recipe.slots[i];
+                      final chosen = slotChoices[i]!;
+                      if (engine.inventory.getItemCount(chosen) < slot.quantity * craftCount) {
+                        hasAll = false;
+                        break;
+                      }
+                    }
+                    if (selectedModifierItemId != null) {
+                      if (engine.inventory.getItemCount(selectedModifierItemId!) < craftCount) {
+                        hasAll = false;
+                      }
+                    }
+
+                    if (!hasAll) {
+                      GameToast.show(context, '⚠️ Missing required materials for selected quantity!', isError: true);
+                      return;
+                    }
+
+                    // Queue it in the engine
+                    final stationKey = "${inst.zoneId}::${inst.stationId}";
+                    engine.queueStationCraft(
+                      stationKey,
+                      recipe.id,
+                      slotChoices,
+                      modifierItemId: selectedModifierItemId,
+                      count: craftCount,
+                    );
+
+                    Navigator.pop(context);
+                  },
+                ),
+              ],
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Slots inputs
+                  Text(
+                    'REQUIRED INGREDIENTS',
+                    style: DSText.label(context),
+                  ),
+                  const SizedBox(height: 6),
+                  Column(
+                    children: List.generate(recipe.slots.length, (slotIdx) {
+                      final slot = recipe.slots[slotIdx];
+                      final chosenItemId = slotChoices[slotIdx]!;
+
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 10),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: DSColors.surface2,
+                          borderRadius: BorderRadius.circular(DSRadius.md),
+                          border: Border.all(color: DSColors.borderDefault),
                         ),
-                        IconButton(
-                          icon: const Icon(Icons.close, color: GameTheme.textMuted),
-                          onPressed: () => Navigator.pop(context),
-                        ),
-                      ],
-                    ),
-                    const Divider(color: GameTheme.border),
-                    const SizedBox(height: 8),
-
-                    // Slots inputs
-                    const Text(
-                      'REQUIRED INGREDIENTS',
-                      style: TextStyle(color: GameTheme.textMuted, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.1),
-                    ),
-                    const SizedBox(height: 6),
-                    Column(
-                      children: List.generate(recipe.slots.length, (slotIdx) {
-                        final slot = recipe.slots[slotIdx];
-                        final chosenItemId = slotChoices[slotIdx]!;
-
-                        return Container(
-                          margin: const EdgeInsets.only(bottom: 10),
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: GameTheme.cardBg,
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: GameTheme.border),
-                          ),
-                          child: Row(
-                            children: [
-                              Text(
-                                'Slot ${slotIdx + 1} (${slot.quantity}x): ',
-                                style: const TextStyle(color: GameTheme.textMuted, fontSize: 11, fontWeight: FontWeight.bold),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: DropdownButton<String>(
-                                  value: chosenItemId,
-                                  isExpanded: true,
-                                  dropdownColor: GameTheme.cardBg,
-                                  underline: const SizedBox.shrink(),
-                                  style: const TextStyle(color: Colors.white, fontSize: 12),
-                                  onChanged: (newVal) {
-                                    if (newVal != null) {
-                                      setModalState(() {
-                                        slotChoices[slotIdx] = newVal;
-                                      });
-                                    }
-                                  },
-                                  items: slot.acceptedItems.map((choice) {
-                                    final item = Items.findById(choice.itemId);
-                                    final invQty = engine.inventory.getItemCount(choice.itemId);
-                                    final reqQty = slot.quantity * craftCount;
-                                    final enough = invQty >= reqQty;
-
-                                    String biasLabel = '';
-                                    if (choice.qualityBias != 0.0) {
-                                      final sign = choice.qualityBias > 0 ? '+' : '';
-                                      biasLabel = ' ($sign${(choice.qualityBias * 100).toInt()}% Qual)';
-                                    }
-
-                                    return DropdownMenuItem<String>(
-                                      value: choice.itemId,
-                                      child: Row(
-                                        children: [
-                                          Text(item?.icon ?? '📦'),
-                                          const SizedBox(width: 6),
-                                          Expanded(
-                                            child: Text(
-                                              '${item?.name ?? choice.itemId}$biasLabel',
-                                              overflow: TextOverflow.ellipsis,
-                                              style: TextStyle(
-                                                color: enough ? Colors.white : GameTheme.healthRed,
-                                              ),
-                                            ),
-                                          ),
-                                          Text(
-                                            '$invQty/$reqQty',
-                                            style: TextStyle(
-                                              color: enough ? GameTheme.textMuted : GameTheme.healthRed,
-                                              fontSize: 10,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    );
-                                  }).toList(),
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      }),
-                    ),
-                    const SizedBox(height: 8),
-
-                    // Modifier slot
-                    const Text(
-                      'ACTIVE MODIFIER (OPTIONAL)',
-                      style: TextStyle(color: GameTheme.textMuted, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.1),
-                    ),
-                    const SizedBox(height: 6),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: GameTheme.cardBg,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: GameTheme.border),
-                      ),
-                      child: DropdownButton<String?>(
-                        value: selectedModifierItemId,
-                        isExpanded: true,
-                        dropdownColor: GameTheme.cardBg,
-                        underline: const SizedBox.shrink(),
-                        hint: const Text('Select a modifier item (none)', style: TextStyle(color: GameTheme.textMuted, fontSize: 12)),
-                        style: const TextStyle(color: Colors.white, fontSize: 12),
-                        onChanged: (newVal) {
-                          if (newVal == 'hollow_bone' && recipe.resultItem?.type != ItemType.weapon) {
-                            _showModifierWarningDialog(
-                              context,
-                              'Hollow Bone',
-                              'weapons',
-                              recipe.resultItem?.name ?? 'this item',
-                              () {
-                                setModalState(() {
-                                  selectedModifierItemId = newVal;
-                                });
-                              },
-                              () {
-                                setModalState(() {
-                                  selectedModifierItemId = null;
-                                });
-                              },
-                            );
-                          } else if (newVal == 'sea_tear' && recipe.resultItem?.type != ItemType.armor) {
-                            _showModifierWarningDialog(
-                              context,
-                              'Sea-Tear',
-                              'armor',
-                              recipe.resultItem?.name ?? 'this item',
-                              () {
-                                setModalState(() {
-                                  selectedModifierItemId = newVal;
-                                });
-                              },
-                              () {
-                                setModalState(() {
-                                  selectedModifierItemId = null;
-                                });
-                              },
-                            );
-                          } else {
-                            setModalState(() {
-                              selectedModifierItemId = newVal;
-                            });
-                          }
-                        },
-                        items: [
-                          const DropdownMenuItem<String?>(
-                            value: null,
-                            child: Text('None (No modifier active)'),
-                          ),
-                          ...availableModifiers.map((m) {
-                            final invQty = engine.inventory.getItemCount(m.id);
-
-                            String effectDesc = '';
-                            if (m.id == 'wildflower') effectDesc = '+50% XP';
-                            if (m.id == 'nightshade') effectDesc = 'Force Affix';
-                            if (m.id == 'river_clay') effectDesc = '30% Save Chance';
-                            if (m.id == 'wild_berries') effectDesc = 'Standard Quality Floor';
-                            if (m.id == 'troll_claw') effectDesc = 'Fine Quality Floor';
-                            if (m.id == 'boar_tusk') effectDesc = '+1 Output Qty';
-                            if (m.id == 'moonpetal') effectDesc = 'Force Affix (Moonpetal)';
-                            if (m.id == 'spirit_sap') effectDesc = 'Double Output (Spirit Sap)';
-                            if (m.id == 'hollow_bone') effectDesc = 'Brutal Weapon Affix (Hollow Bone)';
-                            if (m.id == 'sea_tear') effectDesc = 'Tempered Armor Affix (Sea-Tear)';
-                            if (m.id == 'coalblood') effectDesc = 'Frugal Affix (Coalblood)';
-                            if (m.id == 'wisp_light') effectDesc = 'Guaranteed Masterwork (Wisp-Light)';
-
-                            return DropdownMenuItem<String?>(
-                              value: m.id,
-                              child: Row(
-                                children: [
-                                  Text(m.icon),
-                                  const SizedBox(width: 6),
-                                  Expanded(
-                                    child: Text(
-                                      '${m.name} ($effectDesc)',
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                  Text(
-                                    'Qty: $invQty',
-                                    style: const TextStyle(color: GameTheme.textMuted, fontSize: 10),
-                                  ),
-                                ],
-                              ),
-                            );
-                          }).toList(),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-
-                    // Count Picker
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          'CRAFT QUANTITY',
-                          style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
-                        ),
-                        Row(
+                        child: Row(
                           children: [
-                            IconButton(
-                              icon: const Icon(Icons.remove_circle_outline, color: GameTheme.craftingCyan),
-                              onPressed: craftCount > 1
-                                  ? () {
-                                      setModalState(() {
-                                        craftCount--;
-                                      });
-                                    }
-                                  : null,
+                            Text(
+                              'Slot ${slotIdx + 1} (${slot.quantity}x): ',
+                              style: DSText.label(context).copyWith(fontWeight: FontWeight.bold),
                             ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                              decoration: BoxDecoration(
-                                color: GameTheme.cardBg,
-                                borderRadius: BorderRadius.circular(6),
-                                border: Border.all(color: GameTheme.border),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: DropdownButton<String>(
+                                value: chosenItemId,
+                                isExpanded: true,
+                                dropdownColor: DSColors.surface2,
+                                underline: const SizedBox.shrink(),
+                                style: DSText.bodyMedium(context),
+                                onChanged: (newVal) {
+                                  if (newVal != null) {
+                                    setModalState(() {
+                                      slotChoices[slotIdx] = newVal;
+                                    });
+                                  }
+                                },
+                                items: slot.acceptedItems.map((choice) {
+                                  final item = Items.findById(choice.itemId);
+                                  final invQty = engine.inventory.getItemCount(choice.itemId);
+                                  final reqQty = slot.quantity * craftCount;
+                                  final enough = invQty >= reqQty;
+
+                                  String biasLabel = '';
+                                  if (choice.qualityBias != 0.0) {
+                                    final sign = choice.qualityBias > 0 ? '+' : '';
+                                    biasLabel = ' ($sign${(choice.qualityBias * 100).toInt()}% Qual)';
+                                  }
+
+                                  return DropdownMenuItem<String>(
+                                    value: choice.itemId,
+                                    child: Row(
+                                      children: [
+                                        Text(item?.icon ?? '📦'),
+                                        const SizedBox(width: 6),
+                                        Expanded(
+                                          child: Text(
+                                            '${item?.name ?? choice.itemId}$biasLabel',
+                                            overflow: TextOverflow.ellipsis,
+                                            style: TextStyle(
+                                              color: enough ? DSColors.textPrimary : DSColors.error,
+                                            ),
+                                          ),
+                                        ),
+                                        Text(
+                                          '$invQty/$reqQty',
+                                          style: DSText.numeric(context).copyWith(
+                                            color: enough ? DSColors.textMuted : DSColors.error,
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                }).toList(),
                               ),
-                              child: Text(
-                                '$craftCount',
-                                style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
-                              ),
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.add_circle_outline, color: GameTheme.craftingCyan),
-                              onPressed: craftCount < maxCraftCount
-                                  ? () {
-                                      setModalState(() {
-                                        craftCount++;
-                                      });
-                                    }
-                                  : null,
                             ),
                           ],
                         ),
-                      ],
+                      );
+                    }),
+                  ),
+                  const SizedBox(height: 8),
+
+                  // Modifier slot
+                  Text(
+                    'ACTIVE MODIFIER (OPTIONAL)',
+                    style: DSText.label(context),
+                  ),
+                  const SizedBox(height: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: DSColors.surface2,
+                      borderRadius: BorderRadius.circular(DSRadius.md),
+                      border: Border.all(color: DSColors.borderDefault),
                     ),
-                    const SizedBox(height: 16),
-
-                    // Queue Craft Button
-                    ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: GameTheme.craftingCyan,
-                        foregroundColor: Colors.black,
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      ),
-                      onPressed: () {
-                        // Check if player has all choices multiplied by craftCount
-                        bool hasAll = true;
-                        for (int i = 0; i < recipe.slots.length; i++) {
-                          final slot = recipe.slots[i];
-                          final chosen = slotChoices[i]!;
-                          if (engine.inventory.getItemCount(chosen) < slot.quantity * craftCount) {
-                            hasAll = false;
-                            break;
-                          }
+                    child: DropdownButton<String?>(
+                      value: selectedModifierItemId,
+                      isExpanded: true,
+                      dropdownColor: DSColors.surface2,
+                      underline: const SizedBox.shrink(),
+                      hint: Text('Select a modifier item (none)', style: DSText.bodyMedium(context).copyWith(color: DSColors.textDisabled)),
+                      style: DSText.bodyMedium(context),
+                      onChanged: (newVal) {
+                        if (newVal == 'hollow_bone' && recipe.resultItem?.type != ItemType.weapon) {
+                          _showModifierWarningDialog(
+                            context,
+                            'Hollow Bone',
+                            'weapons',
+                            recipe.resultItem?.name ?? 'this item',
+                            () {
+                              setModalState(() {
+                                selectedModifierItemId = newVal;
+                              });
+                            },
+                            () {
+                              setModalState(() {
+                                selectedModifierItemId = null;
+                              });
+                            },
+                          );
+                        } else if (newVal == 'sea_tear' && recipe.resultItem?.type != ItemType.armor) {
+                          _showModifierWarningDialog(
+                            context,
+                            'Sea-Tear',
+                            'armor',
+                            recipe.resultItem?.name ?? 'this item',
+                            () {
+                              setModalState(() {
+                                selectedModifierItemId = newVal;
+                              });
+                            },
+                            () {
+                              setModalState(() {
+                                selectedModifierItemId = null;
+                              });
+                            },
+                          );
+                        } else {
+                          setModalState(() {
+                            selectedModifierItemId = newVal;
+                          });
                         }
-                        if (selectedModifierItemId != null) {
-                          if (engine.inventory.getItemCount(selectedModifierItemId!) < craftCount) {
-                            hasAll = false;
-                          }
-                        }
+                      },
+                      items: [
+                        const DropdownMenuItem<String?>(
+                          value: null,
+                          child: Text('None (No modifier active)'),
+                        ),
+                        ...availableModifiers.map((m) {
+                          final invQty = engine.inventory.getItemCount(m.id);
 
-                        if (!hasAll) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('⚠️ Missing required materials for selected quantity!'),
-                              backgroundColor: GameTheme.healthRed,
-                              behavior: SnackBarBehavior.floating,
+                          String effectDesc = '';
+                          if (m.id == 'wildflower') effectDesc = '+50% XP';
+                          if (m.id == 'nightshade') effectDesc = 'Force Affix';
+                          if (m.id == 'river_clay') effectDesc = '30% Save Chance';
+                          if (m.id == 'wild_berries') effectDesc = 'Standard Quality Floor';
+                          if (m.id == 'troll_claw') effectDesc = 'Fine Quality Floor';
+                          if (m.id == 'boar_tusk') effectDesc = '+1 Output Qty';
+                          if (m.id == 'moonpetal') effectDesc = 'Force Affix (Moonpetal)';
+                          if (m.id == 'spirit_sap') effectDesc = 'Double Output (Spirit Sap)';
+                          if (m.id == 'hollow_bone') effectDesc = 'Brutal Weapon Affix (Hollow Bone)';
+                          if (m.id == 'sea_tear') effectDesc = 'Tempered Armor Affix (Sea-Tear)';
+                          if (m.id == 'coalblood') effectDesc = 'Frugal Affix (Coalblood)';
+                          if (m.id == 'wisp_light') effectDesc = 'Guaranteed Masterwork (Wisp-Light)';
+
+                          return DropdownMenuItem<String?>(
+                            value: m.id,
+                            child: Row(
+                              children: [
+                                Text(m.icon),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(
+                                    '${m.name} ($effectDesc)',
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                Text(
+                                  'Qty: $invQty',
+                                  style: DSText.bodySmall(context),
+                                ),
+                              ],
                             ),
                           );
-                          return;
-                        }
-
-                        // Queue it in the engine
-                        final stationKey = "${inst.zoneId}::${inst.stationId}";
-                        engine.queueStationCraft(
-                          stationKey,
-                          recipe.id,
-                          slotChoices,
-                          modifierItemId: selectedModifierItemId,
-                          count: craftCount,
-                        );
-
-                        Navigator.pop(context);
-                      },
-                      child: Text(
-                        'Queue $craftCount x ${recipe.name}',
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                      ),
+                        }).toList(),
+                      ],
                     ),
-                    const SizedBox(height: 8),
-                  ],
-                ),
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Count Picker
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'CRAFT QUANTITY',
+                        style: DSText.bodyMedium(context).copyWith(fontWeight: FontWeight.bold),
+                      ),
+                      Row(
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.remove_circle_outline, color: DSColors.accent),
+                            onPressed: craftCount > 1
+                                ? () {
+                                    setModalState(() {
+                                      craftCount--;
+                                    });
+                                  }
+                                : null,
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: DSColors.surface2,
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: DSColors.borderDefault),
+                            ),
+                            child: Text(
+                              '$craftCount',
+                              style: DSText.numeric(context).copyWith(fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.add_circle_outline, color: DSColors.accent),
+                            onPressed: craftCount < maxCraftCount
+                                ? () {
+                                    setModalState(() {
+                                      craftCount++;
+                                    });
+                                  }
+                                : null,
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                ],
               ),
             );
           },
@@ -1768,34 +1585,28 @@ class _BuildViewState extends State<BuildView> {
         child: ListView(
           children: [
             // Town Square Warning Banner
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: GameTheme.healthRed.withOpacity(0.08),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: GameTheme.healthRed.withOpacity(0.25)),
-              ),
+            GameCard(
+              elevation: 0,
+              accentColor: DSColors.error,
               child: Row(
                 children: [
-                  const Icon(Icons.warning_amber_rounded, color: GameTheme.healthRed, size: 24),
+                  const Icon(Icons.warning_amber_rounded, color: DSColors.error, size: 24),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
-                      children: const [
+                      children: [
                         Text(
                           'TOWN SQUARE RESTRICTION',
-                          style: TextStyle(
-                            color: GameTheme.healthRed,
-                            fontSize: 11,
+                          style: DSText.label(context).copyWith(
+                            color: DSColors.error,
                             fontWeight: FontWeight.bold,
-                            letterSpacing: 1.0,
                           ),
                         ),
-                        SizedBox(height: 2),
+                        const SizedBox(height: 2),
                         Text(
                           'Building from scratch is prohibited here. Only the pre-existing ruined Crafting Bench and Field Kitchen can be restored.',
-                          style: TextStyle(color: GameTheme.textLight, fontSize: 11, height: 1.3),
+                          style: DSText.bodySmall(context).copyWith(color: DSColors.textPrimary, height: 1.3),
                         ),
                       ],
                     ),
@@ -1820,18 +1631,15 @@ class _BuildViewState extends State<BuildView> {
         children: [
           // Active action banner if upgrading/restoring/building
           if (activeAction != null && activeAction.station != null) ...[
-            Container(
-              padding: const EdgeInsets.all(12),
-              margin: const EdgeInsets.only(bottom: 12),
-              decoration: GameTheme.glassCardDecoration(
-                customBg: GameTheme.craftingCyan.withOpacity(0.08),
-              ),
+            GameCard(
+              elevation: 2,
+              accentColor: DSColors.accent,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Row(
                     children: [
-                      const Icon(Icons.construction_rounded, color: GameTheme.craftingCyan, size: 18),
+                      const Icon(Icons.construction_rounded, color: DSColors.accent, size: 18),
                       const SizedBox(width: 8),
                       Text(
                         activeAction.isRestoration
@@ -1839,89 +1647,19 @@ class _BuildViewState extends State<BuildView> {
                             : activeAction.isUpgrade
                                 ? 'Upgrading ${activeAction.station!.name}...'
                                 : 'Building ${activeAction.station!.name}...',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 13,
-                          fontWeight: FontWeight.bold,
-                        ),
+                        style: DSText.bodyMedium(context).copyWith(fontWeight: FontWeight.bold),
                       ),
                       const Spacer(),
                       Text(
                         '${(activeAction.progress * 100).toInt()}%',
-                        style: const TextStyle(
-                          color: GameTheme.craftingCyan,
-                          fontSize: 13,
-                          fontWeight: FontWeight.bold,
-                        ),
+                        style: DSText.numeric(context).copyWith(color: DSColors.accent, fontWeight: FontWeight.bold),
                       ),
                     ],
                   ),
                   const SizedBox(height: 8),
-                  CustomProgressBar(
+                  GameProgressBar(
                     progress: activeAction.progress,
-                    color: GameTheme.craftingCyan,
-                    height: 10,
-                  ),
-                  const SizedBox(height: 6),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Remaining time: ${(activeAction.durationSeconds * (1.0 - activeAction.progress)).toStringAsFixed(1)}s',
-                        style: const TextStyle(color: GameTheme.textMuted, fontSize: 10),
-                      ),
-                      TextButton.icon(
-                        style: TextButton.styleFrom(
-                          foregroundColor: GameTheme.healthRed,
-                          padding: EdgeInsets.zero,
-                          minimumSize: const Size(60, 24),
-                        ),
-                        onPressed: () => engine.cancelAction(),
-                        icon: const Icon(Icons.cancel, size: 12),
-                        label: const Text('Cancel', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ] else if (activeAction != null && activeAction.structure != null) ...[
-            Container(
-              padding: const EdgeInsets.all(12),
-              margin: const EdgeInsets.only(bottom: 12),
-              decoration: GameTheme.glassCardDecoration(
-                customBg: GameTheme.craftingCyan.withOpacity(0.08),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Row(
-                    children: [
-                      const Icon(Icons.construction_rounded, color: GameTheme.craftingCyan, size: 18),
-                      const SizedBox(width: 8),
-                      Text(
-                        'Building ${activeAction.structure!.name}...',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 13,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const Spacer(),
-                      Text(
-                        '${(activeAction.progress * 100).toInt()}%',
-                        style: const TextStyle(
-                          color: GameTheme.craftingCyan,
-                          fontSize: 13,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  CustomProgressBar(
-                    progress: activeAction.progress,
-                    color: GameTheme.craftingCyan,
+                    color: DSColors.accent,
                     height: 10,
                   ),
                   const SizedBox(height: 6),
@@ -1930,23 +1668,68 @@ class _BuildViewState extends State<BuildView> {
                     children: [
                       Text(
                         'Remaining: ${(activeAction.durationSeconds * (1.0 - activeAction.progress)).toStringAsFixed(1)}s',
-                        style: const TextStyle(color: GameTheme.textMuted, fontSize: 10),
+                        style: DSText.bodySmall(context),
                       ),
-                      TextButton.icon(
-                        style: TextButton.styleFrom(
-                          foregroundColor: GameTheme.healthRed,
-                          padding: EdgeInsets.zero,
-                          minimumSize: const Size(60, 24),
-                        ),
+                      GameButton(
+                        variant: GameButtonVariant.danger,
+                        label: 'Cancel',
+                        size: GameButtonSize.sm,
                         onPressed: () => engine.cancelAction(),
-                        icon: const Icon(Icons.cancel, size: 12),
-                        label: const Text('Cancel', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
                       ),
                     ],
                   ),
                 ],
               ),
             ),
+            const SizedBox(height: 12),
+          ] else if (activeAction != null && activeAction.structure != null) ...[
+            GameCard(
+              elevation: 2,
+              accentColor: DSColors.accent,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.construction_rounded, color: DSColors.accent, size: 18),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Building ${activeAction.structure!.name}...',
+                        style: DSText.bodyMedium(context).copyWith(fontWeight: FontWeight.bold),
+                      ),
+                      const Spacer(),
+                      Text(
+                        '${(activeAction.progress * 100).toInt()}%',
+                        style: DSText.numeric(context).copyWith(color: DSColors.accent, fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  GameProgressBar(
+                    progress: activeAction.progress,
+                    color: DSColors.accent,
+                    height: 10,
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Remaining: ${(activeAction.durationSeconds * (1.0 - activeAction.progress)).toStringAsFixed(1)}s',
+                        style: DSText.bodySmall(context),
+                      ),
+                      GameButton(
+                        variant: GameButtonVariant.danger,
+                        label: 'Cancel',
+                        size: GameButtonSize.sm,
+                        onPressed: () => engine.cancelAction(),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
           ],
 
           Expanded(
@@ -2001,97 +1784,79 @@ class _BuildViewState extends State<BuildView> {
       final energyMet = engine.playerStats.currentEnergy >= energyCost;
       final canRestore = hasMaterials && energyMet && activeAction == null;
 
-      return Card(
-        color: GameTheme.cardBg,
-        margin: const EdgeInsets.only(bottom: 12),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-          side: BorderSide(
-            color: isCurrentlyRestoring ? GameTheme.healthRed : GameTheme.healthRed.withOpacity(0.3),
-            width: isCurrentlyRestoring ? 1.5 : 1.0,
-          ),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                children: [
-                  Text(station.icon, style: const TextStyle(fontSize: 28)),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Ruined ${station.name}',
-                          style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
-                        ),
-                        const SizedBox(height: 2),
-                        const Text(
-                          'This town square facility is ruined. Restore it to operational state to unlock crafting recipes.',
-                          style: TextStyle(color: GameTheme.textMuted, fontSize: 11),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              Row(
-                children: const [
-                  Icon(Icons.psychology, size: 12, color: GameTheme.textMuted),
-                  SizedBox(width: 4),
-                  Text('Req: Level 1 in primary skill', style: TextStyle(color: GameTheme.textMuted, fontSize: 10)),
-                  Spacer(),
-                  Text('⚡: 5 | ⏱️: 10s', style: TextStyle(color: GameTheme.textMuted, fontSize: 10)),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Wrap(spacing: 6, runSpacing: 4, children: costChips),
-              const SizedBox(height: 10),
-              if (isCurrentlyRestoring)
-                Row(
-                  children: [
-                    Expanded(
-                      child: CustomProgressBar(
-                        progress: activeAction!.progress,
-                        color: GameTheme.healthRed,
-                        height: 12,
+      return GameCard(
+        elevation: 2,
+        accentColor: DSColors.error,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                GameAvatar(emoji: station.icon, size: GameAvatarSize.md, ringColor: DSColors.error),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Ruined ${station.name}',
+                        style: DSText.headingSmall(context).copyWith(fontWeight: FontWeight.bold),
                       ),
-                    ),
-                    const SizedBox(width: 10),
-                    ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: GameTheme.healthRed,
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      const SizedBox(height: 2),
+                      Text(
+                        'This town square facility is ruined. Restore it to operational state to unlock crafting recipes.',
+                        style: DSText.bodySmall(context),
                       ),
-                      onPressed: () => engine.cancelAction(),
-                      child: const Text('Cancel', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
-                    ),
-                  ],
-                )
-              else
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: canRestore ? GameTheme.healthRed : const Color(0xFF222C37),
-                    foregroundColor: canRestore ? Colors.white : GameTheme.textMuted,
-                  ),
-                  onPressed: canRestore ? () => engine.startRestoringStation(station.id) : null,
-                  child: Text(
-                    !hasMaterials
-                        ? 'Missing Materials'
-                        : !energyMet
-                            ? 'Not Enough Energy'
-                            : activeAction != null
-                                ? 'Busy'
-                                : 'Restore Station',
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
+                    ],
                   ),
                 ),
-            ],
-          ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Icon(Icons.psychology, size: 12, color: DSColors.textMuted),
+                const SizedBox(width: 4),
+                Text('Req: Level 1 in primary skill', style: DSText.bodySmall(context)),
+                const Spacer(),
+                Text('⚡: 5 | ⏱️: 10s', style: DSText.bodySmall(context)),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Wrap(spacing: 6, runSpacing: 4, children: costChips),
+            const SizedBox(height: 10),
+            if (isCurrentlyRestoring)
+              Row(
+                children: [
+                  Expanded(
+                    child: GameProgressBar(
+                      progress: activeAction!.progress,
+                      color: DSColors.error,
+                      height: 12,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  GameButton(
+                    variant: GameButtonVariant.danger,
+                    label: 'Cancel',
+                    size: GameButtonSize.sm,
+                    onPressed: () => engine.cancelAction(),
+                  ),
+                ],
+              )
+            else
+              GameButton(
+                variant: canRestore ? GameButtonVariant.primary : GameButtonVariant.ghost,
+                label: !hasMaterials
+                    ? 'Missing Materials'
+                    : !energyMet
+                        ? 'Not Enough Energy'
+                        : activeAction != null
+                            ? 'Busy'
+                            : 'Restore Station',
+                onPressed: canRestore ? () => engine.startRestoringStation(station.id) : null,
+              ),
+          ],
         ),
       );
     } else {
@@ -2118,119 +1883,101 @@ class _BuildViewState extends State<BuildView> {
       final energyMet = nextTier == null || engine.playerStats.currentEnergy >= nextTier.upgradeEnergyCost;
       final canUpgrade = nextTier != null && levelMet && hasMaterials && energyMet && activeAction == null;
 
-      return Card(
-        color: GameTheme.cardBg,
-        margin: const EdgeInsets.only(bottom: 12),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-          side: BorderSide(
-            color: isCurrentlyUpgrading ? GameTheme.craftingCyan : GameTheme.border.withOpacity(0.5),
-            width: isCurrentlyUpgrading ? 1.5 : 1.0,
-          ),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                children: [
-                  Text(station.icon, style: const TextStyle(fontSize: 28)),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          '${station.name} (Tier ${inst.tier})',
-                          style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          isMaxed
-                              ? 'Fully upgraded and operational!'
-                              : 'Upgrading unlocks quality bonuses, faster crafting, and parallel slots.',
-                          style: const TextStyle(color: GameTheme.textMuted, fontSize: 11),
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (isMaxed)
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: GameTheme.accentGold.withOpacity(0.15),
-                        border: Border.all(color: GameTheme.accentGold),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: const Text('MAX TIER', style: TextStyle(color: GameTheme.accentGold, fontSize: 8, fontWeight: FontWeight.bold)),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              if (!isMaxed && nextTier != null) ...[
-                Row(
-                  children: [
-                    Icon(Icons.psychology, size: 12, color: levelMet ? GameTheme.textMuted : GameTheme.healthRed),
-                    const SizedBox(width: 4),
-                    Text(
-                      'Req: Lvl ${nextTier.requiredSkillLevel} ${station.primarySkill.name}',
-                      style: TextStyle(color: levelMet ? GameTheme.textMuted : GameTheme.healthRed, fontSize: 10),
-                    ),
-                    const Spacer(),
-                    Text(
-                      '⚡: ${nextTier.upgradeEnergyCost} | ⏱️: ${nextTier.upgradeDurationSeconds}s',
-                      style: const TextStyle(color: GameTheme.textMuted, fontSize: 10),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Wrap(spacing: 6, runSpacing: 4, children: costChips),
-                const SizedBox(height: 10),
-                if (isCurrentlyUpgrading)
-                  Row(
+      return GameCard(
+        elevation: 2,
+        accentColor: isCurrentlyUpgrading ? DSColors.accent : null,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                GameAvatar(emoji: station.icon, size: GameAvatarSize.md),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(
-                        child: CustomProgressBar(
-                          progress: activeAction!.progress,
-                          color: GameTheme.craftingCyan,
-                          height: 12,
-                        ),
+                      Text(
+                        '${station.name} (Tier ${inst.tier})',
+                        style: DSText.headingSmall(context).copyWith(fontWeight: FontWeight.bold),
                       ),
-                      const SizedBox(width: 10),
-                      ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: GameTheme.healthRed,
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        ),
-                        onPressed: () => engine.cancelAction(),
-                        child: const Text('Cancel', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+                      const SizedBox(height: 2),
+                      Text(
+                        isMaxed
+                            ? 'Fully upgraded and operational!'
+                            : 'Upgrading unlocks quality bonuses, faster crafting, and parallel slots.',
+                        style: DSText.bodySmall(context),
                       ),
                     ],
-                  )
-                else
-                  ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: canUpgrade ? GameTheme.craftingCyan : const Color(0xFF222C37),
-                      foregroundColor: canUpgrade ? Colors.black : GameTheme.textMuted,
+                  ),
+                ),
+                if (isMaxed)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: DSColors.accent.withOpacity(0.15),
+                      border: Border.all(color: DSColors.accent),
+                      borderRadius: BorderRadius.circular(4),
                     ),
-                    onPressed: canUpgrade ? () => engine.startUpgradingStation(station.id) : null,
-                    child: Text(
-                      !levelMet
-                          ? 'Requires Lvl ${nextTier.requiredSkillLevel} ${station.primarySkill.name}'
-                          : !hasMaterials
-                              ? 'Missing Materials'
-                              : !energyMet
-                                  ? 'Not Enough Energy'
-                                  : activeAction != null
-                                      ? 'Busy'
-                                      : 'Upgrade to Tier $nextTierVal',
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
-                    ),
+                    child: const Text('MAX TIER', style: TextStyle(color: DSColors.accent, fontSize: 8, fontWeight: FontWeight.bold)),
                   ),
               ],
+            ),
+            const SizedBox(height: 10),
+            if (!isMaxed && nextTier != null) ...[
+              Row(
+                children: [
+                  Icon(Icons.psychology, size: 12, color: levelMet ? DSColors.textMuted : DSColors.error),
+                  const SizedBox(width: 4),
+                  Text(
+                    'Req: Lvl ${nextTier.requiredSkillLevel} ${station.primarySkill.name}',
+                    style: DSText.bodySmall(context).copyWith(color: levelMet ? DSColors.textMuted : DSColors.error),
+                  ),
+                  const Spacer(),
+                  Text(
+                    '⚡: ${nextTier.upgradeEnergyCost} | ⏱️: ${nextTier.upgradeDurationSeconds}s',
+                    style: DSText.bodySmall(context),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Wrap(spacing: 6, runSpacing: 4, children: costChips),
+              const SizedBox(height: 10),
+              if (isCurrentlyUpgrading)
+                Row(
+                  children: [
+                    Expanded(
+                      child: GameProgressBar(
+                        progress: activeAction!.progress,
+                        color: DSColors.accent,
+                        height: 12,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    GameButton(
+                      variant: GameButtonVariant.danger,
+                      label: 'Cancel',
+                      size: GameButtonSize.sm,
+                      onPressed: () => engine.cancelAction(),
+                    ),
+                  ],
+                )
+              else
+                GameButton(
+                  variant: canUpgrade ? GameButtonVariant.primary : GameButtonVariant.ghost,
+                  label: !levelMet
+                      ? 'Requires Lvl ${nextTier.requiredSkillLevel} ${station.primarySkill.name}'
+                      : !hasMaterials
+                          ? 'Missing Materials'
+                          : !energyMet
+                              ? 'Not Enough Energy'
+                              : activeAction != null
+                                  ? 'Busy'
+                                  : 'Upgrade to Tier $nextTierVal',
+                  onPressed: canUpgrade ? () => engine.startUpgradingStation(station.id) : null,
+                ),
             ],
-          ),
+          ],
         ),
       );
     }
@@ -2270,105 +2017,87 @@ class _BuildViewState extends State<BuildView> {
       final energyMet = engine.playerStats.currentEnergy >= struct.energyCost;
       final canBuild = levelMet && hasMaterials && energyMet && activeAction == null;
 
-      return Card(
-        color: GameTheme.cardBg,
-        margin: const EdgeInsets.only(bottom: 12),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-          side: BorderSide(
-            color: isCurrentlyBuilding ? GameTheme.craftingCyan : GameTheme.border.withOpacity(0.5),
-            width: isCurrentlyBuilding ? 1.5 : 1.0,
-          ),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                children: [
-                  Text(struct.icon, style: const TextStyle(fontSize: 28)),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Build ${struct.name}',
-                          style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          struct.description,
-                          style: const TextStyle(color: GameTheme.textMuted, fontSize: 11),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  Icon(Icons.psychology, size: 12, color: levelMet ? GameTheme.textMuted : GameTheme.healthRed),
-                  const SizedBox(width: 4),
-                  Text(
-                    'Req: Level ${struct.requiredLevel} ${struct.requiredSkill.name}',
-                    style: TextStyle(color: levelMet ? GameTheme.textMuted : GameTheme.healthRed, fontSize: 10),
-                  ),
-                  const Spacer(),
-                  Text(
-                    '⚡: ${struct.energyCost} | ⏱️: ${struct.durationSeconds}s | XP: +${struct.xpReward.toInt()}',
-                    style: const TextStyle(color: GameTheme.textMuted, fontSize: 10),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Wrap(spacing: 6, runSpacing: 4, children: costChips),
-              const SizedBox(height: 10),
-              if (isCurrentlyBuilding)
-                Row(
-                  children: [
-                    Expanded(
-                      child: CustomProgressBar(
-                        progress: activeAction!.progress,
-                        color: GameTheme.craftingCyan,
-                        height: 12,
+      return GameCard(
+        elevation: 2,
+        accentColor: isCurrentlyBuilding ? DSColors.accent : null,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                GameAvatar(emoji: struct.icon, size: GameAvatarSize.md),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Build ${struct.name}',
+                        style: DSText.headingSmall(context).copyWith(fontWeight: FontWeight.bold),
                       ),
-                    ),
-                    const SizedBox(width: 10),
-                    ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: GameTheme.healthRed,
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      const SizedBox(height: 2),
+                      Text(
+                        struct.description,
+                        style: DSText.bodySmall(context),
                       ),
-                      onPressed: () => engine.cancelAction(),
-                      child: const Text('Cancel', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
-                    ),
-                  ],
-                )
-              else
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: canBuild ? GameTheme.craftingCyan : const Color(0xFF222C37),
-                    foregroundColor: canBuild ? Colors.black : GameTheme.textMuted,
-                  ),
-                  onPressed: canBuild ? () => engine.startBuilding(struct, currentZone.id) : null,
-                  child: Text(
-                    !levelMet
-                        ? 'Requires Lvl ${struct.requiredLevel} ${struct.requiredSkill.name}'
-                        : !hasMaterials
-                            ? 'Missing Materials'
-                            : !energyMet
-                                ? 'Not Enough Energy'
-                                : activeAction != null
-                                    ? 'Busy'
-                                    : 'Build Station',
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
+                    ],
                   ),
                 ),
-            ],
-          ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Icon(Icons.psychology, size: 12, color: levelMet ? DSColors.textMuted : DSColors.error),
+                const SizedBox(width: 4),
+                Text(
+                  'Req: Level ${struct.requiredLevel} ${struct.requiredSkill.name}',
+                  style: DSText.bodySmall(context).copyWith(color: levelMet ? DSColors.textMuted : DSColors.error),
+                ),
+                const Spacer(),
+                Text(
+                  '⚡: ${struct.energyCost} | ⏱️: ${struct.durationSeconds}s | XP: +${struct.xpReward.toInt()}',
+                  style: DSText.bodySmall(context),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Wrap(spacing: 6, runSpacing: 4, children: costChips),
+            const SizedBox(height: 10),
+            if (isCurrentlyBuilding)
+              Row(
+                children: [
+                  Expanded(
+                    child: GameProgressBar(
+                      progress: activeAction!.progress,
+                      color: DSColors.accent,
+                      height: 12,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  GameButton(
+                    variant: GameButtonVariant.danger,
+                    label: 'Cancel',
+                    size: GameButtonSize.sm,
+                    onPressed: () => engine.cancelAction(),
+                  ),
+                ],
+              )
+            else
+              GameButton(
+                variant: canBuild ? GameButtonVariant.primary : GameButtonVariant.ghost,
+                label: !levelMet
+                    ? 'Requires Lvl ${struct.requiredLevel} ${struct.requiredSkill.name}'
+                    : !hasMaterials
+                        ? 'Missing Materials'
+                        : !energyMet
+                            ? 'Not Enough Energy'
+                            : activeAction != null
+                                ? 'Busy'
+                                : 'Build Station',
+                onPressed: canBuild ? () => engine.startBuilding(struct, currentZone.id) : null,
+              ),
+          ],
         ),
       );
     } else {
@@ -2395,119 +2124,101 @@ class _BuildViewState extends State<BuildView> {
       final energyMet = nextTier == null || engine.playerStats.currentEnergy >= nextTier.upgradeEnergyCost;
       final canUpgrade = nextTier != null && levelMet && hasMaterials && energyMet && activeAction == null;
 
-      return Card(
-        color: GameTheme.cardBg,
-        margin: const EdgeInsets.only(bottom: 12),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-          side: BorderSide(
-            color: isCurrentlyUpgrading ? GameTheme.craftingCyan : GameTheme.border.withOpacity(0.5),
-            width: isCurrentlyUpgrading ? 1.5 : 1.0,
-          ),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                children: [
-                  Text(station.icon, style: const TextStyle(fontSize: 28)),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          '${station.name} (Tier ${inst.tier})',
-                          style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          isMaxed
-                              ? 'Fully upgraded and operational!'
-                              : 'Upgrading unlocks quality bonuses, faster crafting, and parallel slots.',
-                          style: const TextStyle(color: GameTheme.textMuted, fontSize: 11),
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (isMaxed)
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: GameTheme.accentGold.withOpacity(0.15),
-                        border: Border.all(color: GameTheme.accentGold),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: const Text('MAX TIER', style: TextStyle(color: GameTheme.accentGold, fontSize: 8, fontWeight: FontWeight.bold)),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              if (!isMaxed && nextTier != null) ...[
-                Row(
-                  children: [
-                    Icon(Icons.psychology, size: 12, color: levelMet ? GameTheme.textMuted : GameTheme.healthRed),
-                    const SizedBox(width: 4),
-                    Text(
-                      'Req: Lvl ${nextTier.requiredSkillLevel} ${station.primarySkill.name}',
-                      style: TextStyle(color: levelMet ? GameTheme.textMuted : GameTheme.healthRed, fontSize: 10),
-                    ),
-                    const Spacer(),
-                    Text(
-                      '⚡: ${nextTier.upgradeEnergyCost} | ⏱️: ${nextTier.upgradeDurationSeconds}s',
-                      style: const TextStyle(color: GameTheme.textMuted, fontSize: 10),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Wrap(spacing: 6, runSpacing: 4, children: costChips),
-                const SizedBox(height: 10),
-                if (isCurrentlyUpgrading)
-                  Row(
+      return GameCard(
+        elevation: 2,
+        accentColor: isCurrentlyUpgrading ? DSColors.accent : null,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                GameAvatar(emoji: station.icon, size: GameAvatarSize.md),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(
-                        child: CustomProgressBar(
-                          progress: activeAction!.progress,
-                          color: GameTheme.craftingCyan,
-                          height: 12,
-                        ),
+                      Text(
+                        '${station.name} (Tier ${inst.tier})',
+                        style: DSText.headingSmall(context).copyWith(fontWeight: FontWeight.bold),
                       ),
-                      const SizedBox(width: 10),
-                      ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: GameTheme.healthRed,
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        ),
-                        onPressed: () => engine.cancelAction(),
-                        child: const Text('Cancel', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+                      const SizedBox(height: 2),
+                      Text(
+                        isMaxed
+                            ? 'Fully upgraded and operational!'
+                            : 'Upgrading unlocks quality bonuses, faster crafting, and parallel slots.',
+                        style: DSText.bodySmall(context),
                       ),
                     ],
-                  )
-                else
-                  ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: canUpgrade ? GameTheme.craftingCyan : const Color(0xFF222C37),
-                      foregroundColor: canUpgrade ? Colors.black : GameTheme.textMuted,
+                  ),
+                ),
+                if (isMaxed)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: DSColors.accent.withOpacity(0.15),
+                      border: Border.all(color: DSColors.accent),
+                      borderRadius: BorderRadius.circular(4),
                     ),
-                    onPressed: canUpgrade ? () => engine.startUpgradingStation(station.id) : null,
-                    child: Text(
-                      !levelMet
-                          ? 'Requires Lvl ${nextTier.requiredSkillLevel} ${station.primarySkill.name}'
-                          : !hasMaterials
-                              ? 'Missing Materials'
-                              : !energyMet
-                                  ? 'Not Enough Energy'
-                                  : activeAction != null
-                                      ? 'Busy'
-                                      : 'Upgrade to Tier $nextTierVal',
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
-                    ),
+                    child: const Text('MAX TIER', style: TextStyle(color: DSColors.accent, fontSize: 8, fontWeight: FontWeight.bold)),
                   ),
               ],
+            ),
+            const SizedBox(height: 10),
+            if (!isMaxed && nextTier != null) ...[
+              Row(
+                children: [
+                  Icon(Icons.psychology, size: 12, color: levelMet ? DSColors.textMuted : DSColors.error),
+                  const SizedBox(width: 4),
+                  Text(
+                    'Req: Lvl ${nextTier.requiredSkillLevel} ${station.primarySkill.name}',
+                    style: DSText.bodySmall(context).copyWith(color: levelMet ? DSColors.textMuted : DSColors.error),
+                  ),
+                  const Spacer(),
+                  Text(
+                    '⚡: ${nextTier.upgradeEnergyCost} | ⏱️: ${nextTier.upgradeDurationSeconds}s',
+                    style: DSText.bodySmall(context),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Wrap(spacing: 6, runSpacing: 4, children: costChips),
+              const SizedBox(height: 10),
+              if (isCurrentlyUpgrading)
+                Row(
+                  children: [
+                    Expanded(
+                      child: GameProgressBar(
+                        progress: activeAction!.progress,
+                        color: DSColors.accent,
+                        height: 12,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    GameButton(
+                      variant: GameButtonVariant.danger,
+                      label: 'Cancel',
+                      size: GameButtonSize.sm,
+                      onPressed: () => engine.cancelAction(),
+                    ),
+                  ],
+                )
+              else
+                GameButton(
+                  variant: canUpgrade ? GameButtonVariant.primary : GameButtonVariant.ghost,
+                  label: !levelMet
+                      ? 'Requires Lvl ${nextTier.requiredSkillLevel} ${station.primarySkill.name}'
+                      : !hasMaterials
+                          ? 'Missing Materials'
+                          : !energyMet
+                              ? 'Not Enough Energy'
+                              : activeAction != null
+                                  ? 'Busy'
+                                  : 'Upgrade to Tier $nextTierVal',
+                  onPressed: canUpgrade ? () => engine.startUpgradingStation(station.id) : null,
+                ),
             ],
-          ),
+          ],
         ),
       );
     }
@@ -2518,10 +2229,10 @@ class _BuildViewState extends State<BuildView> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: const Color(0xFF151D26),
+        color: DSColors.surface0,
         borderRadius: BorderRadius.circular(6),
         border: Border.all(
-          color: met ? GameTheme.border.withOpacity(0.5) : GameTheme.healthRed.withOpacity(0.3),
+          color: met ? DSColors.borderSubtle : DSColors.error.withOpacity(0.3),
         ),
       ),
       child: Row(
@@ -2529,11 +2240,11 @@ class _BuildViewState extends State<BuildView> {
         children: [
           Text(icon, style: const TextStyle(fontSize: 10)),
           const SizedBox(width: 4),
-          Text('$name: ', style: const TextStyle(color: GameTheme.textMuted, fontSize: 10)),
+          Text('$name: ', style: DSText.bodySmall(context)),
           Text(
             '$current/$required',
-            style: TextStyle(
-              color: met ? Colors.white : GameTheme.healthRed,
+            style: DSText.numeric(context).copyWith(
+              color: met ? DSColors.textPrimary : DSColors.error,
               fontWeight: FontWeight.bold,
               fontSize: 10,
             ),
@@ -2563,23 +2274,23 @@ class _BuildViewState extends State<BuildView> {
       context: context,
       builder: (context) {
         return AlertDialog(
-          backgroundColor: GameTheme.cardBg,
+          backgroundColor: DSColors.surface2,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
-            side: const BorderSide(color: GameTheme.border, width: 1.5),
+            side: const BorderSide(color: DSColors.borderDefault, width: 1.5),
           ),
           title: Row(
             children: const [
               Text('⚠️ ', style: TextStyle(fontSize: 20)),
               Text(
                 'Modifier Mismatch',
-                style: TextStyle(color: GameTheme.accentGold, fontSize: 16, fontWeight: FontWeight.bold),
+                style: TextStyle(color: DSColors.accent, fontSize: 16, fontWeight: FontWeight.bold),
               ),
             ],
           ),
           content: Text(
             'The $modifierName modifier is designed for $requiredType, but you are crafting $actualName. The modifier\'s special effect will not apply to this craft.\n\nDo you want to use it anyway?',
-            style: const TextStyle(color: Colors.white70, fontSize: 13, height: 1.4),
+            style: DSText.bodyMedium(context).copyWith(height: 1.4),
           ),
           actions: [
             TextButton(
@@ -2587,11 +2298,11 @@ class _BuildViewState extends State<BuildView> {
                 Navigator.of(context).pop();
                 onCancel();
               },
-              child: const Text('Cancel', style: TextStyle(color: GameTheme.textMuted)),
+              child: Text('Cancel', style: DSText.button(context).copyWith(color: DSColors.textMuted)),
             ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
-                backgroundColor: GameTheme.accentGold,
+                backgroundColor: DSColors.accent,
                 foregroundColor: Colors.black,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
               ),
@@ -2599,7 +2310,7 @@ class _BuildViewState extends State<BuildView> {
                 Navigator.of(context).pop();
                 onConfirm();
               },
-              child: const Text('Use Anyway', style: TextStyle(fontWeight: FontWeight.bold)),
+              child: Text('Use Anyway', style: DSText.button(context).copyWith(color: Colors.black, fontWeight: FontWeight.bold)),
             ),
           ],
         );

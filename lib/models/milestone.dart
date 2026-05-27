@@ -236,6 +236,26 @@ class Milestones {
     onFire: (engine) => engine.setEngineFlag('nexus_unlockable'),
   );
 
+  static final MilestoneEvent nexusFirstVisit = MilestoneEvent(
+    id: 'nexus_first_visit',
+    severity: MilestoneSeverity.major,
+    title: 'The Nexus',
+    body: 'You step into the Nexus. The air is colder here, and it remembers everything. The Source is listening.',
+    icon: '🌀',
+    trigger: (engine) => engine.currentZone.id == 'nexus_of_echoes',
+    onFire: null,
+  );
+
+  static final MilestoneEvent sourceDefeated = MilestoneEvent(
+    id: 'source_defeated',
+    severity: MilestoneSeverity.major,
+    title: 'The Source Quieted',
+    body: 'You have walked the world of Elaria, and quieted the Source. Nothing larger is listening now.',
+    icon: '👁️',
+    trigger: (engine) => engine.engineFlags.contains('source_cleanser'),
+    onFire: null,
+  );
+
   static final List<MilestoneEvent> all = [
     townSquareRestored,
     firstCodexFragment,
@@ -256,5 +276,7 @@ class Milestones {
     breachStoneCleansedMilestone,
     breachTideCleansedMilestone,
     allBreachesCleansedMilestone,
+    nexusFirstVisit,
+    sourceDefeated,
   ];
 }

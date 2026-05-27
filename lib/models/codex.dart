@@ -677,6 +677,15 @@ class Achievements {
       trigger: AchievementTrigger.totalLevel,
       criteria: const {'sum': 50},
     ),
+    Achievement(
+      id: 'source_cleansed',
+      name: 'Source Cleanser',
+      description: 'You walked the world and quieted the Source.',
+      icon: '👁️',
+      category: AchievementCategory.mastery,
+      trigger: AchievementTrigger.custom,
+      criteria: const {'key': 'source_defeated'},
+    ),
 
     // --- Combat (6) ---
     Achievement(

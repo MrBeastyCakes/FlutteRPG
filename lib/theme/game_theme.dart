@@ -23,6 +23,7 @@ class GameTheme {
   static const Color lorePurple = Color(0xFFAB47BC);
   static const Color cookingOrange = Color(0xFFFFA726);
   static const Color craftingCyan = Color(0xFF26C6DA);
+  static const Color combatRed = Color(0xFFEF5350);
 
   static Color getSkillColor(dynamic skillType) {
     // Using string matching to avoid tight coupling if skillType is passed as enum
@@ -34,6 +35,7 @@ class GameTheme {
     if (name.contains('lore')) return lorePurple;
     if (name.contains('cooking')) return cookingOrange;
     if (name.contains('crafting')) return craftingCyan;
+    if (name.contains('combat')) return combatRed;
     return textMuted;
   }
 

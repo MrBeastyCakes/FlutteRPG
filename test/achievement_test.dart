@@ -7,8 +7,8 @@ import 'package:flutter_text_based_rpg/models/shop.dart';
 
 void main() {
   group('Achievement System Tests', () {
-    test('Achievements registry has exactly 40 achievements', () {
-      expect(Achievements.all.length, 40);
+    test('Achievements registry has exactly 41 achievements', () {
+      expect(Achievements.all.length, 41);
     });
 
     test('Achievements are grouped correctly into categories', () {
@@ -18,7 +18,7 @@ void main() {
       }
 
       expect(map[AchievementCategory.firstSteps], 6);
-      expect(map[AchievementCategory.mastery], 6);
+      expect(map[AchievementCategory.mastery], 7);
       expect(map[AchievementCategory.combat], 6);
       expect(map[AchievementCategory.crafting], 6);
       expect(map[AchievementCategory.lore], 6);
@@ -26,11 +26,11 @@ void main() {
       expect(map[AchievementCategory.hidden], 4);
     });
 
-    test('Achievements display: 36 visible, 4 hidden', () {
+    test('Achievements display: 37 visible, 4 hidden', () {
       final visible = Achievements.all.where((a) => !a.hidden).toList();
       final hidden = Achievements.all.where((a) => a.hidden).toList();
 
-      expect(visible.length, 36);
+      expect(visible.length, 37);
       expect(hidden.length, 4);
       
       for (final h in hidden) {

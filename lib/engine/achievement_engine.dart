@@ -157,6 +157,8 @@ class AchievementEngine {
             return engine.engineFlags.contains('ach_consume_elixir_of_twilight');
           case 'obelisk_double_drop':
             return engine.engineFlags.contains('ach_obelisk_double_drop');
+          case 'source_defeated':
+            return engine.engineFlags.contains('source_cleanser');
         }
         return false;
     }

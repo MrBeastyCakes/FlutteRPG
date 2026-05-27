@@ -9,6 +9,10 @@ import '../models/main_quests.dart';
 import '../models/zone.dart';
 import '../models/structure.dart';
 import '../theme/game_theme.dart';
+import '../theme/design_tokens.dart';
+import '../widgets/game/game_card.dart';
+import '../widgets/game/game_button.dart';
+import '../widgets/game/game_progress_bar.dart';
 import '../widgets/custom_progress_bar.dart';
 import '../widgets/item_dashboard_modal.dart';
 import '../models/item.dart';
@@ -27,6 +31,7 @@ import '../models/weather.dart';
 import '../widgets/pulsing_weather_chip.dart';
 import '../widgets/quick_slot_bar.dart';
 import '../widgets/combat_action_bar.dart';
+import '../widgets/you_win_modal.dart';
 
 
 class DashboardView extends StatefulWidget {
@@ -85,57 +90,67 @@ class _DashboardViewState extends State<DashboardView> {
       });
     }
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(12.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _buildQuestLogChip(context, engine),
-          _buildStationStatusStrip(context, engine),
-          // 1. HEADER: Character Info & Stats
-          _buildHeader(stats, engine),
-          const SizedBox(height: 12),
-
-          // 2. CURRENT LOCATION CARD
-          _buildLocationCard(currentZone),
-          const SizedBox(height: 12),
-
-          if (engine.activeCombat != null) ...[
-            _buildCombatDashboardCard(context, engine),
-            const SizedBox(height: 12),
-          ],
-
-          _buildActiveRecipeCard(engine),
-          
-          _buildQuickUseFoodBar(context, engine),
-
-          // 3. MAIN SECTION: Split layout (Actions on Left, Stats/Inv on Right)
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+    return Stack(
+      children: [
+        SingleChildScrollView(
+          padding: const EdgeInsets.all(12.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Left side: Zone Actions
-              Expanded(
-                flex: 11,
-                child: _buildZoneActions(engine, currentZone),
-              ),
-              const SizedBox(width: 12),
-              // Right side: Skills & Inventory
-              Expanded(
-                flex: 9,
-                child: Column(
-                  children: [
-                    _buildSkillsPanel(engine),
-                    const SizedBox(height: 12),
-                    const QuickSlotBar(),
-                    const SizedBox(height: 12),
-                    _buildInventoryPanel(engine),
-                  ],
-                ),
+              _buildQuestLogChip(context, engine),
+              _buildStationStatusStrip(context, engine),
+              // 1. HEADER: Character Info & Stats
+              _buildHeader(stats, engine),
+              const SizedBox(height: 12),
+
+              // 2. CURRENT LOCATION CARD
+              _buildLocationCard(currentZone),
+              const SizedBox(height: 12),
+
+              if (engine.activeCombat != null) ...[
+                _buildCombatDashboardCard(context, engine),
+                const SizedBox(height: 12),
+              ],
+
+              _buildActiveRecipeCard(engine),
+              
+              _buildQuickUseFoodBar(context, engine),
+
+              // 3. MAIN SECTION: Split layout (Actions on Left, Stats/Inv on Right)
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Left side: Zone Actions
+                  Expanded(
+                    flex: 11,
+                    child: _buildZoneActions(engine, currentZone),
+                  ),
+                  const SizedBox(width: 12),
+                  // Right side: Skills & Inventory
+                  Expanded(
+                    flex: 9,
+                    child: Column(
+                      children: [
+                        _buildSkillsPanel(engine),
+                        const SizedBox(height: 12),
+                        const QuickSlotBar(),
+                        const SizedBox(height: 12),
+                        _buildInventoryPanel(engine),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
-        ],
-      ),
+        ),
+        if (engine.shouldShowYouWinModal)
+          Positioned.fill(
+            child: YouWinModal(
+              onContinue: () => engine.dismissYouWinModal(),
+            ),
+          ),
+      ],
     );
   }
 
@@ -233,7 +248,7 @@ class _DashboardViewState extends State<DashboardView> {
                     child: GameProgressBar(
                       progress: xpPercent,
                       color: Colors.purpleAccent,
-                      label: 'XP: ${stats.playerXp}/$nextXp',
+                      leadingLabel: 'XP: ${stats.playerXp}/$nextXp',
                     ),
                   ),
                 ],
@@ -276,11 +291,9 @@ class _DashboardViewState extends State<DashboardView> {
 
     final reversedLogs = combatState.combatLog.reversed.toList();
 
-    return Container(
-      decoration: GameTheme.glassCardDecoration(
-        customBg: const Color(0xFF1E2833).withOpacity(0.8),
-      ),
-      padding: const EdgeInsets.all(16),
+    return GameCard(
+      elevation: 2,
+      accentColor: DSColors.error,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -292,34 +305,22 @@ class _DashboardViewState extends State<DashboardView> {
                 children: [
                   const Text('⚔️', style: TextStyle(fontSize: 20)),
                   const SizedBox(width: 8),
-                  const Text(
+                  Text(
                     'BATTLE IN PROGRESS',
-                    style: TextStyle(
-                      color: GameTheme.accentGold,
-                      fontSize: 12,
+                    style: DSText.label(context).copyWith(
+                      color: DSColors.error,
                       fontWeight: FontWeight.bold,
-                      letterSpacing: 1.2,
                     ),
                   ),
                 ],
               ),
-              ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: GameTheme.healthRed,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                ),
+              GameButton(
+                variant: GameButtonVariant.danger,
+                label: 'Flee Battle',
+                size: GameButtonSize.sm,
                 onPressed: () {
                   engine.cancelAction();
                 },
-                icon: const Icon(Icons.run_circle_outlined, size: 16),
-                label: const Text(
-                  'Flee Battle',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-                ),
               ),
             ],
           ),
@@ -333,22 +334,20 @@ class _DashboardViewState extends State<DashboardView> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
+                    Text(
                       '👤 Player Health',
-                      style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                      style: DSText.bodyMedium(context).copyWith(fontWeight: FontWeight.bold),
                     ),
                     const SizedBox(height: 4),
-                    LinearProgressIndicator(
-                      value: playerHpPercent,
-                      backgroundColor: Colors.black.withOpacity(0.5),
-                      valueColor: const AlwaysStoppedAnimation<Color>(GameTheme.healthRed),
-                      minHeight: 8,
-                      borderRadius: BorderRadius.circular(4),
+                    GameProgressBar(
+                      progress: playerHpPercent,
+                      color: DSColors.healthBar,
+                      height: 8,
                     ),
                     const SizedBox(height: 4),
                     Text(
                       '$playerHp / $playerMaxHp HP',
-                      style: const TextStyle(color: GameTheme.textMuted, fontSize: 11),
+                      style: DSText.numeric(context).copyWith(fontSize: 10, color: DSColors.textMuted),
                     ),
                   ],
                 ),
@@ -363,30 +362,25 @@ class _DashboardViewState extends State<DashboardView> {
                       children: [
                         Text(
                           beast.icon,
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: GameTheme.getBeastIconColor(beast.id),
-                          ),
+                          style: const TextStyle(fontSize: 13),
                         ),
                         const SizedBox(width: 4),
                         Text(
                           beast.name,
-                          style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                          style: DSText.bodyMedium(context).copyWith(fontWeight: FontWeight.bold),
                         ),
                       ],
                     ),
                     const SizedBox(height: 4),
-                    LinearProgressIndicator(
-                      value: beastHpPercent,
-                      backgroundColor: Colors.black.withOpacity(0.5),
-                      valueColor: const AlwaysStoppedAnimation<Color>(Colors.orangeAccent),
-                      minHeight: 8,
-                      borderRadius: BorderRadius.circular(4),
+                    GameProgressBar(
+                      progress: beastHpPercent,
+                      color: DSColors.warning,
+                      height: 8,
                     ),
                     const SizedBox(height: 4),
                     Text(
                       '$beastHp / $beastMaxHp HP',
-                      style: const TextStyle(color: GameTheme.textMuted, fontSize: 11),
+                      style: DSText.numeric(context).copyWith(fontSize: 10, color: DSColors.textMuted),
                     ),
                   ],
                 ),
@@ -401,9 +395,9 @@ class _DashboardViewState extends State<DashboardView> {
           Container(
             height: 150,
             decoration: BoxDecoration(
-              color: const Color(0xFF0C1014).withOpacity(0.9),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: GameTheme.border.withOpacity(0.5)),
+              color: DSColors.surface0,
+              borderRadius: BorderRadius.circular(DSRadius.md),
+              border: Border.all(color: DSColors.borderSubtle),
             ),
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             child: ListView.builder(
@@ -416,9 +410,8 @@ class _DashboardViewState extends State<DashboardView> {
                   padding: const EdgeInsets.symmetric(vertical: 2.0),
                   child: Text(
                     line,
-                    style: TextStyle(
-                      fontFamily: 'monospace',
-                      fontSize: 12,
+                    style: DSText.numeric(context).copyWith(
+                      fontSize: 11,
                       color: color,
                     ),
                   ),
@@ -1045,6 +1038,8 @@ class _DashboardViewState extends State<DashboardView> {
   String _getZoneEmoji(String zoneId) {
     if (zoneId.contains('woods')) return '🌲';
     if (zoneId.contains('mine')) return '⛰️';
+    if (zoneId.contains('sundered_coast')) return '🌊';
+    if (zoneId.contains('nexus')) return '🌀';
     return '🏡';
   }
 
@@ -2347,25 +2342,3 @@ class _DashboardViewState extends State<DashboardView> {
   }
 }
 
-class GameProgressBar extends StatelessWidget {
-  final double progress;
-  final Color color;
-  final String label;
-
-  const GameProgressBar({
-    Key? key,
-    required this.progress,
-    required this.color,
-    required this.label,
-  }) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    return CustomProgressBar(
-      progress: progress,
-      color: color,
-      label: label,
-      height: 10,
-    );
-  }
-}

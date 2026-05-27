@@ -976,6 +976,31 @@ class Zones {
     ],
   );
 
+  static const Zone nexusOfEchoes = Zone(
+    id: 'nexus_of_echoes',
+    name: 'Nexus of Echoes',
+    tier: 3,
+    description: 'A still chamber beneath the world. Three lights — green, grey, blue — hang in the air, waiting to be answered. Something larger waits behind them.',
+    weather: 'Still',
+    weatherBonusDescription: 'No active modifiers.',
+    unlockHint: 'Cleanse all breaches and gather their tokens.',
+    actions: [
+      ZoneAction(
+        id: 'confront_the_source',
+        name: 'Confront the Source',
+        description: 'Step into the convergence and call the Source forth. Your three Tokens hum in answer.',
+        durationSeconds: 4,
+        energyCost: 15,
+        requiredSkill: SkillType.combat,
+        requiredLevel: 1,
+        xpReward: 0,
+        lootTable: [],
+        isCombat: true,
+        beastId: 'the_source',
+      ),
+    ],
+  );
+
   static const List<Zone> all = [
     townSquare,
     whisperingWoodsTier1,
@@ -987,6 +1012,7 @@ class Zones {
     sunderedCoastTier1,
     sunderedCoastTier2,
     sunderedCoastTier3,
+    nexusOfEchoes,
   ];
 
   static Zone findById(String id) {

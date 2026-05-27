@@ -8,8 +8,8 @@ import 'package:flutter_text_based_rpg/models/main_quests.dart';
 
 void main() {
   group('Milestones Configuration', () {
-    test('Milestones.all contains 19 entries (1 from Spec 1 + 10 from Spec 2 + 1 from Spec 3 + 7 from Spec 5)', () {
-      expect(Milestones.all.length, 19);
+    test('Milestones.all contains 21 entries (1 from Spec 1 + 10 from Spec 2 + 1 from Spec 3 + 7 from Spec 5 + 2 from Spec 6c)', () {
+      expect(Milestones.all.length, 21);
     });
 
     test('first_codex_fragment milestone exists', () {
@@ -82,6 +82,51 @@ void main() {
       expect(engine.isActionVisible(Zones.townSquare.actions.firstWhere((a) => a.id == 'burn_wilds_echo_essence')), false);
       expect(engine.completedQuests.any((q) => q.id == 'main_cleanse_hollow'), true);
       expect(engine.isFragmentPoolOpenForTest(CodexTag.source), true);
+    });
+  });
+
+  group('Spec 6c Integration Tests', () {
+    test('Spec 6c acceptance — Source victory closes the convergence arc', () {
+      final engine = GameEngine();
+
+      // Bootstrap: cleanse all 3 breaches via test helpers (sets nexus_unlockable, grants 3 Tokens)
+      engine.cleanseAllBreachesForTest();
+      expect(engine.engineFlags.contains('nexus_unlockable'), true);
+      expect(engine.inventory.hasItem('wilds_cleansing_token', 1), true);
+      expect(engine.inventory.hasItem('stone_cleansing_token', 1), true);
+      expect(engine.inventory.hasItem('tide_cleansing_token', 1), true);
+
+      // Nexus is now unlocked
+      expect(engine.isZoneUnlocked(Zones.nexusOfEchoes), true);
+
+      // Travel to Nexus → milestone + quest visit objective advances
+      engine.travelTo(Zones.nexusOfEchoes);
+      expect(engine.firedMilestoneIdsForTest, contains('nexus_first_visit'));
+
+      // Defeat Source via test helper (runs the 3-phase fight to victory)
+      engine.runCombatToVictoryForTest('the_source');
+
+      // Post-victory state
+      expect(engine.engineFlags.contains('source_cleanser'), true);
+      expect(engine.shouldShowYouWinModal, true);
+      expect(engine.inventory.hasItem('wilds_cleansing_token', 1), false);
+      expect(engine.inventory.hasItem('stone_cleansing_token', 1), false);
+      expect(engine.inventory.hasItem('tide_cleansing_token', 1), false);
+      expect(
+        engine.completedQuests.any((q) => q.id == 'main_source_convergence'),
+        true,
+      );
+      expect(engine.earnedAchievementIds, contains('source_cleansed'));
+      expect(engine.playerStats.title, 'Source Cleanser');
+      expect(engine.firedMilestoneIdsForTest, contains('source_defeated'));
+
+      // Dismiss modal
+      engine.dismissYouWinModal();
+      expect(engine.shouldShowYouWinModal, false);
+
+      // First post-victory town visit fires ambient line
+      engine.travelTo(Zones.townSquare);
+      expect(engine.logs.any((e) => e.message.contains('cartographer raises his cup')), true);
     });
   });
 }

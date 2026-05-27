@@ -16,6 +16,9 @@ enum BeastPassive {
   damageReduction,
   reducedAccuracy,
   enrage,
+  sourceQuake,
+  sourceSedimentStack,
+  sourcePollenCloud,
 }
 
 class EchoPhase {
@@ -329,6 +332,38 @@ class Beasts {
     weaknessHint: 'Strike sides — armored front',
   );
 
+  static const Beast theSource = Beast(
+    id: 'the_source',
+    name: 'The Source',
+    icon: '👁️',
+    maxHealth: 1100,
+    attackPower: 18,
+    defense: 8,
+    xpReward: 1500,
+    lootTable: [],
+    weaknessHint: null,
+    phases: [
+      EchoPhase(
+        hpThreshold: 1.00,
+        ability: _strangleVines,
+        entryNarration: "The chamber dims. Green light blooms around you. The Source wears the Wilds' face — and it remembers being broken.",
+        passive: BeastPassive.sourceQuake,
+      ),
+      EchoPhase(
+        hpThreshold: 0.66,
+        ability: _quake,
+        entryNarration: "The green light hardens to grey. Stone-flesh closes over the wound you dealt. The Source wears a colder face now.",
+        passive: BeastPassive.sourceSedimentStack,
+      ),
+      EchoPhase(
+        hpThreshold: 0.33,
+        ability: _stormShroud,
+        entryNarration: "Grey runs to blue. Salt-mist rises from the floor. The Source wears the Tide's face — and it is angry.",
+        passive: BeastPassive.sourcePollenCloud,
+      ),
+    ],
+  );
+
   static const List<Beast> all = [
     forestBoar,
     caveSpider,
@@ -341,6 +376,7 @@ class Beasts {
     echoOfWilds,
     echoOfStone,
     echoOfTide,
+    theSource,
   ];
 
   static Beast? findById(String id) {

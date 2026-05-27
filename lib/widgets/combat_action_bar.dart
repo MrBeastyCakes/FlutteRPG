@@ -2,8 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../engine/game_engine.dart';
 import '../models/combat.dart';
-import '../theme/game_theme.dart';
+import '../theme/design_tokens.dart';
 import '../models/item.dart';
+import 'game/_animated_pressable.dart';
+import 'game/game_progress_bar.dart';
+import 'game/game_sheet.dart';
+import 'game/game_avatar.dart';
+import 'game/game_card.dart';
+import 'game/game_list_item.dart';
 
 class CombatActionBar extends StatelessWidget {
   const CombatActionBar({super.key});
@@ -17,9 +23,9 @@ class CombatActionBar extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (combat.activeTelegraph != null) _buildTelegraphBanner(combat.activeTelegraph!),
+        if (combat.activeTelegraph != null) _buildTelegraphBanner(context, combat.activeTelegraph!),
         const SizedBox(height: 8),
-        _buildRoundTimer(combat),
+        _buildRoundTimer(context, combat),
         const SizedBox(height: 8),
         Row(
           children: [
@@ -34,13 +40,13 @@ class CombatActionBar extends StatelessWidget {
     );
   }
 
-  Widget _buildTelegraphBanner(BeastTelegraph tg) {
+  Widget _buildTelegraphBanner(BuildContext context, BeastTelegraph tg) {
     return Container(
       padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
-        color: Colors.red.withOpacity(0.15),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.red.withOpacity(0.5)),
+        color: DSColors.errorSoft,
+        borderRadius: BorderRadius.circular(DSRadius.md),
+        border: Border.all(color: DSColors.error.withOpacity(0.5)),
       ),
       child: Row(
         children: [
@@ -49,7 +55,7 @@ class CombatActionBar extends StatelessWidget {
           Expanded(
             child: Text(
               tg.text + (tg.reveal ? ' [${tg.abilityId.toUpperCase()}]' : ''),
-              style: const TextStyle(color: Colors.red, fontSize: 12, fontStyle: FontStyle.italic),
+              style: DSText.bodyMedium(context).copyWith(color: DSColors.error, fontStyle: FontStyle.italic),
             ),
           ),
         ],
@@ -57,22 +63,21 @@ class CombatActionBar extends StatelessWidget {
     );
   }
 
-  Widget _buildRoundTimer(CombatState combat) {
+  Widget _buildRoundTimer(BuildContext context, CombatState combat) {
     final remaining = combat.roundDeadline?.difference(DateTime.now()) ?? Duration.zero;
     final pct = remaining.inMilliseconds.clamp(0, 2000) / 2000.0;
     return Row(
       children: [
-        Text('Round ${combat.currentRoundNumber}', style: const TextStyle(color: GameTheme.textMuted, fontSize: 11)),
+        Text(
+          'Round ${combat.currentRoundNumber}',
+          style: DSText.label(context),
+        ),
         const SizedBox(width: 8),
         Expanded(
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: LinearProgressIndicator(
-              value: pct,
-              backgroundColor: GameTheme.border,
-              valueColor: const AlwaysStoppedAnimation<Color>(GameTheme.accentGold),
-              minHeight: 6,
-            ),
+          child: GameProgressBar(
+            progress: pct,
+            color: DSColors.accent,
+            height: 6,
           ),
         ),
       ],
@@ -95,42 +100,67 @@ class CombatActionBar extends StatelessWidget {
     return Expanded(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 2),
-        child: ElevatedButton(
-          onPressed: !buttonEnabled ? null : () {
+        child: AnimatedPressable(
+          onTap: !buttonEnabled ? null : () {
             if (isItem) {
               _showItemPopover(context, engine);
             } else {
               engine.setCombatStance(stance);
             }
           },
-          style: ElevatedButton.styleFrom(
-            backgroundColor: buttonEnabled ? GameTheme.cardBg : GameTheme.border.withOpacity(0.3),
+          child: Container(
             padding: const EdgeInsets.symmetric(vertical: 10),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(6),
-              side: BorderSide(
-                color: buttonEnabled ? GameTheme.border : Colors.transparent,
-                width: 1,
+            decoration: BoxDecoration(
+              color: buttonEnabled ? DSColors.surface3 : DSColors.surface2.withOpacity(0.3),
+              borderRadius: BorderRadius.circular(DSRadius.md),
+              border: Border.all(
+                color: buttonEnabled ? DSColors.borderEmphasis : Colors.transparent,
+                width: 1.5,
               ),
             ),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(emoji, style: const TextStyle(fontSize: 18)),
-              const SizedBox(height: 2),
-              Text(label, style: const TextStyle(fontSize: 10, color: Colors.white)),
-              if (cost > 0) ...[
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(emoji, style: const TextStyle(fontSize: 18)),
                 const SizedBox(height: 2),
-                Text('-$cost E', style: TextStyle(fontSize: 9, color: canAfford ? GameTheme.energyYellow : GameTheme.healthRed, fontWeight: FontWeight.bold)),
-              ] else if (isItem) ...[
-                const SizedBox(height: 2),
-                Text('Use', style: TextStyle(fontSize: 9, color: hasQuickslotItems ? GameTheme.textMuted : GameTheme.healthRed)),
-              ] else ...[
-                const SizedBox(height: 2),
-                const Text('0 E', style: TextStyle(fontSize: 9, color: GameTheme.textMuted)),
+                Text(
+                  label,
+                  style: DSText.label(context).copyWith(
+                    color: buttonEnabled ? DSColors.textPrimary : DSColors.textDisabled,
+                    fontSize: 10,
+                  ),
+                ),
+                if (cost > 0) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    '-$cost E',
+                    style: DSText.numeric(context).copyWith(
+                      fontSize: 9,
+                      color: canAfford ? DSColors.warning : DSColors.error,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ] else if (isItem) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    'Use',
+                    style: DSText.label(context).copyWith(
+                      fontSize: 9,
+                      color: hasQuickslotItems ? DSColors.textMuted : DSColors.error,
+                    ),
+                  ),
+                ] else ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    '0 E',
+                    style: DSText.label(context).copyWith(
+                      fontSize: 9,
+                      color: DSColors.textDisabled,
+                    ),
+                  ),
+                ],
               ],
-            ],
+            ),
           ),
         ),
       ),
@@ -138,16 +168,11 @@ class CombatActionBar extends StatelessWidget {
   }
 
   void _showItemPopover(BuildContext context, GameEngine engine) {
-    showModalBottomSheet(
+    GameSheet.show(
       context: context,
-      backgroundColor: GameTheme.cardBg,
-      builder: (_) => Column(
-        mainAxisSize: MainAxisSize.min,
+      title: 'Select Quick-Slot Item to Use',
+      child: Column(
         children: [
-          const ListTile(
-            title: Text('Select Quick-Slot Item to Use', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-          ),
-          const Divider(color: GameTheme.border),
           for (int i = 0; i < 3; i++) _buildItemOption(context, engine, i),
           const SizedBox(height: 12),
         ],
@@ -158,22 +183,34 @@ class CombatActionBar extends StatelessWidget {
   Widget _buildItemOption(BuildContext context, GameEngine engine, int index) {
     final itemId = engine.quickslots[index];
     final item = itemId != null ? Items.findById(itemId) : null;
-    return ListTile(
-      leading: CircleAvatar(
-        backgroundColor: Colors.black.withOpacity(0.3),
-        child: Text(item != null ? item.icon : '${index + 1}', style: const TextStyle(fontSize: 18)),
+
+    return GameCard(
+      elevation: item != null ? 1 : 0,
+      child: GameListItem(
+        padding: EdgeInsets.zero,
+        leading: GameAvatar(
+          emoji: item != null ? item.icon : '${index + 1}',
+          size: GameAvatarSize.sm,
+          backgroundColor: DSColors.surface3,
+        ),
+        title: Text(
+          item != null ? item.name : 'Slot ${index + 1} (Empty)',
+          style: DSText.bodyMedium(context).copyWith(
+            color: item != null ? DSColors.textPrimary : DSColors.textDisabled,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        subtitle: Text(
+          item != null 
+              ? '+${item.healAmount} HP, +${item.energyAmount} energy'
+              : 'Assign food on Dashboard',
+          style: DSText.bodySmall(context),
+        ),
+        onTap: item != null ? () {
+          Navigator.pop(context); // Close sheet
+          engine.setCombatStance(PlayerStance.item, quickslotIndex: index);
+        } : null,
       ),
-      title: Text(
-        item != null ? item.name : 'Slot ${index + 1} (Empty)',
-        style: TextStyle(color: item != null ? Colors.white : GameTheme.textMuted),
-      ),
-      subtitle: item != null 
-          ? Text('+${item.healAmount} HP, +${item.energyAmount} energy', style: const TextStyle(color: GameTheme.textMuted, fontSize: 11))
-          : const Text('Assign food on Dashboard', style: TextStyle(color: GameTheme.textMuted, fontSize: 11)),
-      onTap: item != null ? () {
-        Navigator.pop(context);
-        engine.setCombatStance(PlayerStance.item, quickslotIndex: index);
-      } : null,
     );
   }
 }
