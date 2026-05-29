@@ -14,6 +14,7 @@ void main() {
   const targetDirs = <String>[
     'lib/views/dashboard',
     'lib/views/combat',
+    'lib/views/inventory',
   ];
 
   // Individual files (outside the guarded directories) that must be token-only.
