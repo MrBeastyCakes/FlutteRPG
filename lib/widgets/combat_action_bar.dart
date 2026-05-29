@@ -11,6 +11,8 @@ import 'game/game_avatar.dart';
 import 'game/game_card.dart';
 import 'game/game_list_item.dart';
 
+@Deprecated(
+    'Use CombatHud and its sub-widgets (Spec 7b-1). Delete once no references remain.')
 class CombatActionBar extends StatelessWidget {
   const CombatActionBar({super.key});
 

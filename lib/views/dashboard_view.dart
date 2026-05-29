@@ -12,6 +12,7 @@ import '../theme/design_tokens.dart';
 import '../widgets/flying_item_overlay.dart';
 import '../widgets/particle_explosion.dart';
 import '../widgets/you_win_modal.dart';
+import 'combat_hud.dart';
 import 'dashboard/player_hand_section.dart';
 import 'dashboard/now_playing_section.dart';
 import 'dashboard/world_pulse_section.dart';
@@ -66,7 +67,7 @@ class _DashboardViewState extends State<DashboardView> {
   Widget build(BuildContext context) {
     final engine = context.watch<GameEngine>();
 
-    // PR2: replace with: if (engine.activeCombat != null) return const CombatHud();
+    if (engine.activeCombat != null) return const CombatHud();
 
     if (engine.tavernRequested) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
