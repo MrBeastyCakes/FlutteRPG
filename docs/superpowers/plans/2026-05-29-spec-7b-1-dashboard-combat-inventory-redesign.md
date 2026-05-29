@@ -21,8 +21,8 @@ The source design doc (`docs/superpowers/specs/2026-05-26-spec-7b-1-dashboard-co
 | `DSText.labelMedium` / `.labelSmall` | `DSText.label(context)` |
 | `DSText.bodyMedium` / `.bodySmall` | `DSText.bodyMedium(context)` / `DSText.bodySmall(context)` |
 | `DSText.numeric` | `DSText.numeric(context)` |
-| `DSSpace.xxs` | `DSSpace.xs4` (the 4px token); `DSSpace.sm8`, `DSSpace.md12`, `DSSpace.lg16`, `DSSpace.xl24` |
-| `DSSpace.md` / `.sm` / `.lg` as `SizedBox(height:)` | `DSSpace.md12` / `DSSpace.sm8` / `DSSpace.lg16` (they are `double` constants) |
+| `DSSpace.xxs` | `DSSpace.xs` (the 4px token); `DSSpace.sm`, `DSSpace.md`, `DSSpace.lg`, `DSSpace.xl` |
+| `DSSpace.md` / `.sm` / `.lg` as `SizedBox(height:)` | `DSSpace.md` / `DSSpace.sm` / `DSSpace.lg` (they are `double` constants) |
 | `DSSpace.section` / `.card` / `.dense` (as padding) | These ARE valid `EdgeInsets` constants — keep them |
 | `DSRadius.all(DSRadius.sm)` | `BorderRadius.circular(DSRadius.sm)` |
 | `DSMotion.quick` | `DSMotion.fast` |
@@ -56,9 +56,9 @@ DSColors.surface0, .borderSubtle, .borderStrong,
 DSColors.skill(SkillType, [int shade]), DSColors.quality(QualityTier, [int shade]), DSColors.tag(CodexTag)
 // DSText: all take BuildContext → display, headingLarge, headingMedium, headingSmall,
 //   bodyLarge, bodyMedium, bodySmall, label, button, numeric
-// DSSpace doubles: xs4=4, sm8=8, md12=12, lg16=16, xl24=24, xxl32=32
+// DSSpace doubles: xs=4, sm=8, md=12, lg=16, xl=24, xxl=32
 // DSSpace EdgeInsets: card, section, dense
-// DSRadius doubles: sm4=4, md8=8, lg12=12, xl16=16, xxl20=20, pill999
+// DSRadius doubles: sm=4, md=8, lg=12, xl=16, xxl=20, pill
 // DSMotion durations: fast=120ms, standard=200ms, slow=350ms, deliberate=500ms
 // DSMotion curves: easeOut, easeInOut, spring, linear
 
@@ -282,7 +282,7 @@ class PlayerHandSection extends StatelessWidget {
           Row(
             children: [
               GameAvatar(emoji: '🧙', size: GameAvatarSize.md, ringColor: ringColor),
-              const SizedBox(width: DSSpace.md12),
+              const SizedBox(width: DSSpace.md),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -300,7 +300,7 @@ class PlayerHandSection extends StatelessWidget {
                 children: [
                   Text('Lvl ${stats.playerLevel}',
                       style: DSText.numeric(context).copyWith(color: DSColors.goldAccent)),
-                  const SizedBox(height: DSSpace.xs4),
+                  const SizedBox(height: DSSpace.xs),
                   SizedBox(
                     width: 120,
                     child: GameProgressBar(
@@ -314,7 +314,7 @@ class PlayerHandSection extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: DSSpace.md12),
+          const SizedBox(height: DSSpace.md),
           GameProgressBar(
             progress: hpRatio,
             color: DSColors.healthBar,
@@ -323,7 +323,7 @@ class PlayerHandSection extends StatelessWidget {
             trailingLabel: '${stats.currentHealth}/${stats.maxHealth}',
             animated: true,
           ),
-          const SizedBox(height: DSSpace.sm8),
+          const SizedBox(height: DSSpace.sm),
           GameProgressBar(
             progress: enRatio,
             color: DSColors.energyBar,
@@ -426,8 +426,8 @@ class WorldPulseSection extends StatelessWidget {
       elevation: 1,
       padding: DSSpace.dense,
       child: Wrap(
-        spacing: DSSpace.sm8,
-        runSpacing: DSSpace.sm8,
+        spacing: DSSpace.sm,
+        runSpacing: DSSpace.sm,
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
           GameChip(
@@ -604,7 +604,7 @@ class _RecentLogSectionState extends State<RecentLogSection> {
                 ),
             ],
           ),
-          const SizedBox(height: DSSpace.sm8),
+          const SizedBox(height: DSSpace.sm),
           if (visible.isEmpty)
             Text('No recent activity.',
                 style: DSText.bodySmall(context).copyWith(color: DSColors.textMuted))
@@ -617,7 +617,7 @@ class _RecentLogSectionState extends State<RecentLogSection> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(sev.glyph, style: TextStyle(color: sev.color, fontSize: 12)),
-                    const SizedBox(width: DSSpace.sm8),
+                    const SizedBox(width: DSSpace.sm),
                     Expanded(
                       child: Text(e.message, style: DSText.bodySmall(context)),
                     ),
@@ -735,14 +735,14 @@ class NowPlayingSection extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text('Now Playing', style: DSText.label(context).copyWith(color: DSColors.textSecondary)),
-          const SizedBox(height: DSSpace.sm8),
+          const SizedBox(height: DSSpace.sm),
           switch (state) {
             _NowPlayingState.activeAction => _buildActiveAction(context, engine),
             _NowPlayingState.zoneActions => _buildZoneActions(context, engine),
             _NowPlayingState.townFixtures => _buildTownFixtures(context, engine),
           },
           if (state != _NowPlayingState.activeAction) ...[
-            const SizedBox(height: DSSpace.md12),
+            const SizedBox(height: DSSpace.md),
             GameButton(
               label: 'Travel',
               icon: Icons.explore,
@@ -815,11 +815,11 @@ Widget build(BuildContext context) {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const PlayerHandSection(),
-            const SizedBox(height: DSSpace.md12),
+            const SizedBox(height: DSSpace.md),
             NowPlayingSection(onTravel: () => _showZoneTravelSheet(context, engine)),
-            const SizedBox(height: DSSpace.md12),
+            const SizedBox(height: DSSpace.md),
             WorldPulseSection(onZoneTap: () => _showZoneTravelSheet(context, engine)),
-            const SizedBox(height: DSSpace.md12),
+            const SizedBox(height: DSSpace.md),
             const RecentLogSection(),
           ],
         ),
@@ -1025,7 +1025,7 @@ class BeastCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           GameAvatar(emoji: beast.icon, size: GameAvatarSize.lg, ringColor: accent),
-          const SizedBox(width: DSSpace.md12),
+          const SizedBox(width: DSSpace.md),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1043,7 +1043,7 @@ class BeastCard extends StatelessWidget {
                 ),
                 if (beast.phases != null && phase >= 0 && phase < beast.phases!.length)
                   Text(beast.phases![phase].ability.name, style: DSText.label(context)),
-                const SizedBox(height: DSSpace.sm8),
+                const SizedBox(height: DSSpace.sm),
                 GameProgressBar(
                   progress: hpRatio.clamp(0.0, 1.0),
                   color: DSColors.healthBar,
@@ -1065,7 +1065,7 @@ class BeastCard extends StatelessWidget {
 
   Widget _sedimentRow(BuildContext context, int stacks) {
     return Padding(
-      padding: const EdgeInsets.only(top: DSSpace.xs4),
+      padding: const EdgeInsets.only(top: DSSpace.xs),
       child: Row(
         children: [
           Text('⚠ Sediment: ', style: DSText.label(context).copyWith(color: DSColors.warning)),
@@ -1177,12 +1177,12 @@ class TelegraphStrip extends StatelessWidget {
         decoration: BoxDecoration(
           color: DSColors.error.withValues(alpha: 0.25),
           border: Border.all(color: DSColors.error),
-          borderRadius: BorderRadius.circular(DSRadius.sm4),
+          borderRadius: BorderRadius.circular(DSRadius.sm),
         ),
         child: Row(
           children: [
             const Text('⚠', style: TextStyle(fontSize: 18)),
-            const SizedBox(width: DSSpace.sm8),
+            const SizedBox(width: DSSpace.sm),
             Expanded(
               child: Text(
                 tg.reveal ? '${tg.text}  [${tg.abilityId.toUpperCase()}]' : tg.text,
@@ -1392,7 +1392,7 @@ class PlayerCardMini extends StatelessWidget {
       child: Row(
         children: [
           const GameAvatar(emoji: '🧙', size: GameAvatarSize.sm),
-          const SizedBox(width: DSSpace.sm8),
+          const SizedBox(width: DSSpace.sm),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1405,7 +1405,7 @@ class PlayerCardMini extends StatelessWidget {
                   trailingLabel: '${stats.currentHealth}/${stats.maxHealth}',
                   animated: true,
                 ),
-                const SizedBox(height: DSSpace.xs4),
+                const SizedBox(height: DSSpace.xs),
                 GameProgressBar(
                   progress: enRatio.clamp(0.0, 1.0),
                   color: DSColors.energyBar,
@@ -1516,18 +1516,18 @@ class StancePad extends StatelessWidget {
         Row(
           children: [
             Expanded(child: btn(PlayerStance.strike, '⚔️', 'Strike')),
-            const SizedBox(width: DSSpace.sm8),
+            const SizedBox(width: DSSpace.sm),
             Expanded(child: btn(PlayerStance.heavyStrike, '💪', 'Heavy')),
-            const SizedBox(width: DSSpace.sm8),
+            const SizedBox(width: DSSpace.sm),
             Expanded(child: btn(PlayerStance.defend, '🛡️', 'Defend')),
           ],
         ),
-        const SizedBox(height: DSSpace.sm8),
+        const SizedBox(height: DSSpace.sm),
         Row(
           children: [
             const Spacer(),
             Expanded(flex: 2, child: btn(PlayerStance.readTells, '👁️', 'Read')),
-            const SizedBox(width: DSSpace.sm8),
+            const SizedBox(width: DSSpace.sm),
             Expanded(flex: 2, child: btn(PlayerStance.item, '🎒', 'Item')),
             const Spacer(),
           ],
@@ -1640,7 +1640,7 @@ class QuickslotBar extends StatelessWidget {
         for (int i = 0; i < 3; i++)
           Expanded(
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: DSSpace.xs4),
+              padding: const EdgeInsets.symmetric(horizontal: DSSpace.xs),
               child: _QuickslotCell(index: i, engine: engine),
             ),
           ),
@@ -1781,15 +1781,15 @@ class CombatHud extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: const [
             BeastCard(),
-            SizedBox(height: DSSpace.md12),
+            SizedBox(height: DSSpace.md),
             TelegraphStrip(),
-            SizedBox(height: DSSpace.md12),
+            SizedBox(height: DSSpace.md),
             Center(child: RoundTimerArc()),
-            SizedBox(height: DSSpace.md12),
+            SizedBox(height: DSSpace.md),
             PlayerCardMini(),
             Spacer(),
             StancePad(),
-            SizedBox(height: DSSpace.sm8),
+            SizedBox(height: DSSpace.sm),
             QuickslotBar(),
           ],
         ),
@@ -2246,10 +2246,10 @@ class InventoryFilterBar extends StatelessWidget {
           prefixIcon: Icons.search,
           onChanged: state.setQuery,
         ),
-        const SizedBox(height: DSSpace.sm8),
+        const SizedBox(height: DSSpace.sm),
         Wrap(
-          spacing: DSSpace.sm8,
-          runSpacing: DSSpace.sm8,
+          spacing: DSSpace.sm,
+          runSpacing: DSSpace.sm,
           children: [
             for (final f in filters)
               GameChip(
@@ -2261,7 +2261,7 @@ class InventoryFilterBar extends StatelessWidget {
               ),
           ],
         ),
-        const SizedBox(height: DSSpace.sm8),
+        const SizedBox(height: DSSpace.sm),
         Align(
           alignment: Alignment.centerRight,
           child: GameButton(
@@ -2406,13 +2406,13 @@ class _EquippedStripState extends State<EquippedStrip> {
             ),
           ),
           if (_expanded && equipped.isNotEmpty) ...[
-            const SizedBox(height: DSSpace.sm8),
+            const SizedBox(height: DSSpace.sm),
             Row(
               children: [
                 for (final e in equipped)
                   Expanded(
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: DSSpace.xs4),
+                      padding: const EdgeInsets.symmetric(horizontal: DSSpace.xs),
                       child: _slotCard(context, engine, e),
                     ),
                   ),
@@ -2562,7 +2562,7 @@ class InventoryGridCell extends StatelessWidget {
                 GameChip(label: '×${slot.quantity}', size: GameChipSize.sm, color: DSColors.textMuted),
               if (hasDur)
                 Padding(
-                  padding: const EdgeInsets.only(top: DSSpace.xs4),
+                  padding: const EdgeInsets.only(top: DSSpace.xs),
                   child: GameProgressBar(
                     progress: durRatio.clamp(0.0, 1.0),
                     color: durRatio < 0.25 ? DSColors.warning : DSColors.success,
@@ -2727,9 +2727,9 @@ class InventoryGrid extends StatelessWidget {
         child: Column(
           children: [
             const GameAvatar(emoji: '🎒', size: GameAvatarSize.lg),
-            const SizedBox(height: DSSpace.sm8),
+            const SizedBox(height: DSSpace.sm),
             Text('Your pack is empty.', style: DSText.headingSmall(context)),
-            const SizedBox(height: DSSpace.xs4),
+            const SizedBox(height: DSSpace.xs),
             Text('Gather, craft, or buy something to fill it up.',
                 style: DSText.bodySmall(context).copyWith(color: DSColors.textMuted),
                 textAlign: TextAlign.center),
@@ -2753,7 +2753,7 @@ class InventoryGrid extends StatelessWidget {
               style: DSText.bodySmall(context).copyWith(color: DSColors.textMuted),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: DSSpace.sm8),
+            const SizedBox(height: DSSpace.sm),
             GameButton(
               label: 'Clear filters',
               variant: GameButtonVariant.ghost,
@@ -2770,8 +2770,8 @@ class InventoryGrid extends StatelessWidget {
       physics: const NeverScrollableScrollPhysics(),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 4,
-        mainAxisSpacing: DSSpace.sm8,
-        crossAxisSpacing: DSSpace.sm8,
+        mainAxisSpacing: DSSpace.sm,
+        crossAxisSpacing: DSSpace.sm,
         childAspectRatio: 0.85,
       ),
       itemCount: visible.length,
@@ -2851,11 +2851,11 @@ class InventoryView extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: const [
             InventoryHeader(),
-            SizedBox(height: DSSpace.md12),
+            SizedBox(height: DSSpace.md),
             InventoryFilterBar(),
-            SizedBox(height: DSSpace.md12),
+            SizedBox(height: DSSpace.md),
             EquippedStrip(),
-            SizedBox(height: DSSpace.md12),
+            SizedBox(height: DSSpace.md),
             InventoryGrid(),
           ],
         ),
