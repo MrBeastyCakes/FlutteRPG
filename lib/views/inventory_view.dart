@@ -1,4 +1,4 @@
-import 'dart:math' show max, min;
+import 'dart:math' show max;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -11,10 +11,16 @@ import '../models/shop.dart';
 import '../models/inventory.dart';
 import '../models/crafted_item.dart';
 import '../theme/game_theme.dart';
+import '../theme/design_tokens.dart';
 import '../widgets/custom_progress_bar.dart';
 import '../widgets/item_dashboard_modal.dart';
 import '../widgets/bounce_tap.dart';
 import '../widgets/coin_animation.dart';
+import 'inventory/inventory_filter_state.dart';
+import 'inventory/inventory_header.dart';
+import 'inventory/inventory_filter_bar.dart';
+import 'inventory/equipped_strip.dart';
+import 'inventory/inventory_grid.dart';
 
 class InventoryView extends StatefulWidget {
   const InventoryView({super.key});
@@ -26,7 +32,6 @@ class InventoryView extends StatefulWidget {
 class _InventoryViewState extends State<InventoryView> with SingleTickerProviderStateMixin {
   late TabController _tabController;
   ShopCategory? _selectedShopCategory;
-  String _selectedQualityFilter = 'All';
 
   @override
   void initState() {
@@ -80,201 +85,27 @@ class _InventoryViewState extends State<InventoryView> with SingleTickerProvider
     );
   }
 
+  /// Inventory tab — the redesigned orchestrator (Spec 7b-1 §4): header,
+  /// search/filter bar, equipped strip, and the filtered grid. Wrapped in a
+  /// local [InventoryFilterState] so the filter bar and grid share state.
   Widget _buildInventoryTab(
       BuildContext context, GameEngine engine, dynamic inventory, int gold) {
-    final filteredSlots = inventory.slots.where((slot) {
-      final q = slot.quality;
-      if (_selectedQualityFilter == 'All') return true;
-      if (_selectedQualityFilter == 'Standard+') {
-        return q == null || q == QualityTier.standard || q == QualityTier.fine || q == QualityTier.masterwork;
-      }
-      if (_selectedQualityFilter == 'Fine+') {
-        return q == QualityTier.fine || q == QualityTier.masterwork;
-      }
-      if (_selectedQualityFilter == 'Masterwork only') {
-        return q == QualityTier.masterwork;
-      }
-      return true;
-    }).toList();
-
-    return Padding(
-      padding: const EdgeInsets.all(12.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // Slots filled & Gold display
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Space: ${inventory.occupiedSlots} / ${inventory.capacity} slots filled',
-                style: const TextStyle(color: GameTheme.textMuted, fontSize: 13),
-              ),
-              Row(
-                children: [
-                  const Icon(Icons.monetization_on, color: GameTheme.accentGold, size: 16),
-                  const SizedBox(width: 4),
-                  Text(
-                    '$gold Gold',
-                    style: const TextStyle(
-                      color: GameTheme.accentGold,
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-
-          // Quality filter chips
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: ['All', 'Standard+', 'Fine+', 'Masterwork only'].map((filter) {
-                final isSelected = _selectedQualityFilter == filter;
-                return Padding(
-                  padding: const EdgeInsets.only(right: 8.0),
-                  child: ChoiceChip(
-                    label: Text(filter, style: const TextStyle(fontSize: 12)),
-                    selected: isSelected,
-                    onSelected: (selected) {
-                      if (selected) {
-                        setState(() {
-                          _selectedQualityFilter = filter;
-                        });
-                      }
-                    },
-                    selectedColor: GameTheme.accentGold.withOpacity(0.2),
-                    checkmarkColor: GameTheme.accentGold,
-                    labelStyle: TextStyle(
-                      color: isSelected ? GameTheme.accentGold : GameTheme.textMuted,
-                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                    ),
-                    backgroundColor: const Color(0xFF1E2833),
-                    side: BorderSide(
-                      color: isSelected ? GameTheme.accentGold : GameTheme.border,
-                      width: 1,
-                    ),
-                  ),
-                );
-              }).toList(),
-            ),
-          ),
-          const SizedBox(height: 12),
-
-          // Grid View
-          Expanded(
-            child: GridView.builder(
-              itemCount: inventory.capacity,
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 4,
-                crossAxisSpacing: 8,
-                mainAxisSpacing: 8,
-              ),
-              itemBuilder: (context, index) {
-                if (index < filteredSlots.length) {
-                  final slot = filteredSlots[index];
-                  final item = slot.item;
-                  final qty = slot.quantity;
-
-                  return BounceTap(
-                    onTap: () => ItemDashboardModal.show(
-                      context,
-                      engine,
-                      item,
-                      quantity: qty,
-                      contextType: ItemModalContext.inventory,
-                      quality: slot.quality,
-                      affixIds: slot.affixIds,
-                    ),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF1E2833),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: GameTheme.getQualityColor(slot.quality),
-                          width: slot.quality != null && slot.quality != QualityTier.standard ? 2.0 : 1.5,
-                        ),
-                        boxShadow: [
-                          if (slot.quality == QualityTier.fine)
-                            BoxShadow(
-                              color: Colors.blueAccent.withOpacity(0.2),
-                              blurRadius: 6,
-                              spreadRadius: 1,
-                            ),
-                          if (slot.quality == QualityTier.masterwork)
-                            BoxShadow(
-                              color: GameTheme.accentGold.withOpacity(0.3),
-                              blurRadius: 8,
-                              spreadRadius: 2,
-                            ),
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.2),
-                            blurRadius: 4,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                      child: Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          // Item Emoji
-                          Text(
-                            item.icon,
-                            style: const TextStyle(fontSize: 32),
-                          ),
-                          // Quantity indicator
-                          if (qty > 1)
-                            Positioned(
-                              right: 6,
-                              bottom: 6,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: Colors.black.withOpacity(0.65),
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: Text(
-                                  '$qty',
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          // Tool type indicator badge
-                          if (item.isTool)
-                            const Positioned(
-                              left: 6,
-                              top: 6,
-                              child: Icon(
-                                Icons.build,
-                                size: 10,
-                                color: GameTheme.accentGold,
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                  );
-                } else {
-                  // Empty slot
-                  return Container(
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF10171E).withOpacity(0.4),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: GameTheme.border.withOpacity(0.3), width: 1),
-                    ),
-                  );
-                }
-              },
-            ),
-          ),
-        ],
+    return ChangeNotifierProvider<InventoryFilterState>(
+      create: (_) => InventoryFilterState(),
+      child: SingleChildScrollView(
+        padding: DSSpace.section,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: const [
+            InventoryHeader(),
+            SizedBox(height: DSSpace.md),
+            InventoryFilterBar(),
+            SizedBox(height: DSSpace.md),
+            EquippedStrip(),
+            SizedBox(height: DSSpace.md),
+            InventoryGrid(),
+          ],
+        ),
       ),
     );
   }

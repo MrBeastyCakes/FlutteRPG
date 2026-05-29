@@ -8,6 +8,7 @@ import '../../widgets/game/game_card.dart';
 import '../../widgets/game/game_chip.dart';
 import '../../widgets/game/game_progress_bar.dart';
 import '../../widgets/game/game_tooltip.dart';
+import '../../widgets/item_dashboard_modal.dart';
 
 /// Inventory grid cell — icon, quantity badge, durability bar; tap → detail
 /// sheet, longpress → quick-action menu.
@@ -59,7 +60,8 @@ class InventoryGridCell extends StatelessWidget {
   }
 
   void _showDetailSheet(BuildContext context, GameEngine engine, Item item) {
-    // Implemented in Task 24 (shared with item_dashboard_modal replacement).
+    showItemDetailSheet(context, engine, item,
+        quality: slot.quality, affixIds: slot.affixIds);
   }
 
   void _showActionMenu(BuildContext context, GameEngine engine, Item item) {

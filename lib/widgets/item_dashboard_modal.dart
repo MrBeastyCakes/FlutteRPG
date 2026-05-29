@@ -9,7 +9,154 @@ import '../models/skill.dart';
 import '../models/shop.dart';
 import '../models/crafted_item.dart';
 import '../theme/game_theme.dart';
+import '../theme/design_tokens.dart';
 import 'coin_animation.dart';
+import 'game/game_sheet.dart';
+import 'game/game_button.dart';
+
+/// Shared item-detail sheet (Spec 7b-1 §4.8) — a `GameSheet`-chromed quick
+/// view used by the new inventory grid. Shows icon + name, a quality/skill
+/// subtitle, description, stat lines, and inline action buttons. The legacy
+/// [ItemDashboardModal] (with where-to-get, crafting, and bulk-sell) remains
+/// reachable via the "Inspect" action so no capability is lost.
+Future<void> showItemDetailSheet(
+  BuildContext context,
+  GameEngine engine,
+  Item item, {
+  QualityTier? quality,
+  List<String> affixIds = const [],
+}) {
+  final inTown = engine.currentZone.id == 'town_square';
+  final subtitle = item.isFood
+      ? 'Consumable'
+      : item.isTool
+          ? (item.toolSkill != null ? 'Tool • ${item.toolSkill!.name}' : 'Tool')
+          : item.isWeapon
+              ? 'Weapon'
+              : item.isArmor
+                  ? 'Armor'
+                  : 'Resource';
+
+  return GameSheet.show<void>(
+    context: context,
+    title: '${item.icon} ${item.name}',
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(subtitle,
+            style:
+                DSText.label(context).copyWith(color: DSColors.goldAccent)),
+        const SizedBox(height: DSSpace.sm),
+        Text(item.description,
+            style: DSText.bodyMedium(context)
+                .copyWith(color: DSColors.textSecondary)),
+        const SizedBox(height: DSSpace.md),
+        if (item.isFood) _detailStatLine(context, '❤ Heal', '+${item.healAmount}'),
+        if (item.isFood)
+          _detailStatLine(context, '⚡ Energy', '+${item.energyAmount}'),
+        if (item.isWeapon)
+          _detailStatLine(context, '⚔ Attack', '+${item.attackPower}'),
+        if (item.isArmor)
+          _detailStatLine(context, '🛡 Defense', '+${item.defense}'),
+        if (item.isTool)
+          _detailStatLine(
+              context, '🏎 Speed', '+${(item.speedBonus * 100).toInt()}%'),
+        if (item.value > 0)
+          _detailStatLine(context, '🪙 Value', '${item.value}g'),
+      ],
+    ),
+    actions: [
+      if (item.isFood)
+        GameButton(
+          label: 'Use',
+          icon: Icons.restaurant,
+          variant: GameButtonVariant.primary,
+          size: GameButtonSize.sm,
+          onPressed: () {
+            engine.useItem(item, quality, affixIds);
+            Navigator.pop(context);
+          },
+        ),
+      if (item.isTool)
+        GameButton(
+          label: 'Equip',
+          icon: Icons.build,
+          variant: GameButtonVariant.primary,
+          size: GameButtonSize.sm,
+          onPressed: () {
+            engine.equipTool(item, quality, affixIds);
+            Navigator.pop(context);
+          },
+        ),
+      if (item.isWeapon)
+        GameButton(
+          label: 'Equip',
+          icon: Icons.gavel_rounded,
+          variant: GameButtonVariant.primary,
+          size: GameButtonSize.sm,
+          onPressed: () {
+            engine.equipWeapon(item, quality, affixIds);
+            Navigator.pop(context);
+          },
+        ),
+      if (item.isArmor)
+        GameButton(
+          label: 'Equip',
+          icon: Icons.shield_outlined,
+          variant: GameButtonVariant.primary,
+          size: GameButtonSize.sm,
+          onPressed: () {
+            engine.equipArmor(item, quality, affixIds);
+            Navigator.pop(context);
+          },
+        ),
+      if (inTown && item.value > 0)
+        GameButton(
+          label: 'Sell',
+          icon: Icons.sell_outlined,
+          variant: GameButtonVariant.secondary,
+          size: GameButtonSize.sm,
+          onPressed: () {
+            engine.sellItem(item, 1, quality, affixIds);
+            Navigator.pop(context);
+          },
+        ),
+      GameButton(
+        label: 'Inspect',
+        icon: Icons.search,
+        variant: GameButtonVariant.ghost,
+        size: GameButtonSize.sm,
+        onPressed: () {
+          Navigator.pop(context);
+          ItemDashboardModal.show(
+            context,
+            engine,
+            item,
+            quality: quality,
+            affixIds: affixIds,
+          );
+        },
+      ),
+    ],
+  );
+}
+
+Widget _detailStatLine(BuildContext context, String label, String value) {
+  return Padding(
+    padding: const EdgeInsets.only(bottom: DSSpace.xs),
+    child: Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(label,
+            style: DSText.bodySmall(context)
+                .copyWith(color: DSColors.textMuted)),
+        Text(value,
+            style: DSText.bodySmall(context)
+                .copyWith(color: DSColors.textSecondary)),
+      ],
+    ),
+  );
+}
 
 enum ItemModalContext {
   inventory,
